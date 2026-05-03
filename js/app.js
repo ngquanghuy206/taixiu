@@ -53,6 +53,7 @@ function showHome() {
   if (window._adminTableTimer) { clearInterval(window._adminTableTimer); window._adminTableTimer = null; }
   const iframe = document.getElementById("game-iframe");
   if (iframe) iframe.src = "about:blank";
+  document.getElementById("lobby-float-btn")?.classList.add("hidden");
   setActivePage("home");
   document.getElementById("topbar-center").innerHTML = "";
   document.getElementById("nav-home")?.classList.add("active");
@@ -85,13 +86,16 @@ function showLobbyManager() {
 
 function renderLobbyManager() {
   const g = document.getElementById("lobby-mgr-grid");
+  if (!g) return;
   g.innerHTML = "";
   const maint = getMaintenance();
-  Object.entries(APIS).forEach(([app]) => {
-    const em   = BRAND_EMOJI[app] || "🎰";
-    const grad = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";
-    const col  = BRAND_COLOR[app] || "#00d4ff";
+  // Lấy tất cả sảnh từ APIS (đảm bảo đủ 5)
+  const allApps = Object.keys(APIS);
+  allApps.forEach((app) => {
+    const em      = BRAND_EMOJI[app] || "🎰";
+    const grad    = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";
     const isMaint = !!maint[app];
+    const apis    = APIS[app] || [];
     const card = document.createElement("div");
     card.className = "lobby-mgr-card";
     card.innerHTML = `
@@ -100,7 +104,10 @@ function renderLobbyManager() {
         <div class="lmgr-status-badge ${isMaint ? "maint" : "online"}">${isMaint ? "🔧 BẢO TRÌ" : "✅ ONLINE"}</div>
       </div>
       <div class="lmgr-info">
-        <div class="lmgr-name">${app.toUpperCase()}</div>
+        <div>
+          <div class="lmgr-name">${app.toUpperCase()}</div>
+          <div style="font-size:11px;color:var(--muted2);margin-top:2px">${apis.length} API</div>
+        </div>
         <div class="lmgr-btns">
           ${isMaint
             ? `<button class="lmgr-btn cancel-maint" onclick="askMaintenance('${app}', false)">✅ Huỷ Bảo Trì</button>`
@@ -224,6 +231,48 @@ function openGame(app) {
 }
 
 // ── IFRAME LOAD ────────────────────────────────────────────
+// ── LOBBY POPUP WINDOW ────────────────────────────────────
+window._lobbyPopup = null;
+
+function openLobbyPopup() {
+  const url = document.getElementById("iframe-msg-url").textContent;
+  if (!url || url === "about:blank") return;
+  // Tính toán kích thước cửa sổ popup
+  const sw = window.screen.width;
+  const sh = window.screen.height;
+  const pw = Math.min(480, Math.floor(sw * 0.45));
+  const ph = Math.min(sh, 820);
+  const left = sw - pw;
+  const top  = 0;
+  window._lobbyPopup = window.open(
+    url, "lobby_popup",
+    `width=${pw},height=${ph},left=${left},top=${top},resizable=yes,scrollbars=yes`
+  );
+  if (!window._lobbyPopup || window._lobbyPopup.closed) {
+    // Popup bị chặn → fallback mở tab mới
+    openLobbyTab();
+    return;
+  }
+  // Hiện nút float để refocus popup
+  document.getElementById("lobby-float-btn")?.classList.remove("hidden");
+  // Theo dõi nếu popup bị đóng
+  const checkClosed = setInterval(() => {
+    if (!window._lobbyPopup || window._lobbyPopup.closed) {
+      clearInterval(checkClosed);
+      window._lobbyPopup = null;
+      document.getElementById("lobby-float-btn")?.classList.add("hidden");
+    }
+  }, 1000);
+}
+
+function refocusPopup() {
+  if (window._lobbyPopup && !window._lobbyPopup.closed) {
+    window._lobbyPopup.focus();
+  } else {
+    openLobbyPopup();
+  }
+}
+
 function openLobbyTab() {
   const url = document.getElementById("iframe-msg-url").textContent;
   if (url && url !== "about:blank") window.open(url, "_blank");
@@ -232,21 +281,38 @@ function openLobbyTab() {
 function loadIframe(app) {
   const iframe  = document.getElementById("game-iframe");
   const blocker = document.getElementById("iframe-blocker");
+  const floatBtn = document.getElementById("lobby-float-btn");
   const url     = LOBBY_URLS[app] || "about:blank";
   blocker.classList.add("hidden");
+  floatBtn?.classList.add("hidden");
   document.getElementById("iframe-msg-url").textContent = url;
   iframe.src = url;
   iframe.onload = () => {
-    try { const w = iframe.contentWindow; blocker.classList.add("hidden"); } 
-    catch { blocker.classList.remove("hidden"); }
+    try {
+      // Nếu đọc được contentDocument thì iframe load OK
+      const doc = iframe.contentDocument;
+      if (doc && doc.location.href !== "about:blank") {
+        blocker.classList.add("hidden");
+      } else {
+        blocker.classList.remove("hidden");
+      }
+    } catch {
+      // Bị chặn cross-origin → hiện blocker
+      blocker.classList.remove("hidden");
+    }
   };
   iframe.onerror = () => blocker.classList.remove("hidden");
+  // Timeout fallback: nếu 3.5s vẫn không load được
   setTimeout(() => {
     try {
-      if (!iframe.contentDocument || iframe.contentDocument.URL === "about:blank")
+      const doc = iframe.contentDocument;
+      if (!doc || doc.URL === "about:blank" || doc.body === null) {
         blocker.classList.remove("hidden");
-    } catch { blocker.classList.remove("hidden"); }
-  }, 4000);
+      }
+    } catch {
+      blocker.classList.remove("hidden");
+    }
+  }, 3500);
 }
 
 // ── API TABS ───────────────────────────────────────────────
@@ -312,16 +378,63 @@ function closePred() { window._predOpen = false; document.getElementById("pred-p
 })();
 
 // ── DATA FETCH ─────────────────────────────────────────────
+window._fetchRetry = {};
+
+// Danh sách CORS proxy fallback (thử lần lượt nếu bị block)
+const CORS_PROXIES = [
+  url => url,                                                          // 1. Thử trực tiếp
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,          // 2. corsproxy.io
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // 3. allorigins
+  url => `https://thingproxy.freeboard.io/fetch/${url}`,              // 4. thingproxy
+];
+
+async function fetchWithCors(url) {
+  const key = "proxy_" + url;
+  // Bắt đầu từ proxy đã thành công lần trước (nếu có)
+  let startIdx = window._workingProxy?.[key] ?? 0;
+  for (let i = startIdx; i < CORS_PROXIES.length; i++) {
+    const proxied = CORS_PROXIES[i](url);
+    try {
+      const r = await fetch(proxied, { signal: AbortSignal.timeout(9000) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const data = await r.json();
+      // Lưu proxy hoạt động để lần sau dùng trước
+      if (!window._workingProxy) window._workingProxy = {};
+      window._workingProxy[key] = i;
+      return data;
+    } catch(e) {
+      if (i === CORS_PROXIES.length - 1) throw e; // hết proxy → throw
+    }
+  }
+}
+
 async function doFetch() {
   if (!window._curApp) return;
-  const api = APIS[window._curApp][window._curApiIdx];
+  const app = window._curApp;
+  const api = APIS[app][window._curApiIdx];
+  const key = app + "_" + window._curApiIdx;
+
   try {
-    const r = await fetch(api.url, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) throw new Error();
-    const data = await r.json();
-    processData(data, window._curApp, api);
-  } catch {
-    document.getElementById("pred-body").innerHTML = `<div class="pred-loading">⚠️ Lỗi kết nối — thử lại...</div>`;
+    const data = await fetchWithCors(api.url);
+    window._fetchRetry[key] = 0;
+    processData(data, app, api);
+  } catch(e) {
+    window._fetchRetry[key] = (window._fetchRetry[key] || 0) + 1;
+    const retries = window._fetchRetry[key];
+    const pb = document.getElementById("pred-body");
+    if (!pb) return;
+    pb.innerHTML = `
+      <div class="fetch-err-box">
+        <div class="fetch-err-icon">⚠️</div>
+        <div class="fetch-err-title">Lỗi kết nối API</div>
+        <div class="fetch-err-sub">Đã thử ${CORS_PROXIES.length} phương thức kết nối...<br/>Lần ${retries} — Tự động thử lại sau 15 giây</div>
+        <button class="fetch-retry-btn" onclick="doFetch()">🔄 Thử lại ngay</button>
+        <div class="fetch-err-contact">Lỗi kéo dài? Liên hệ hỗ trợ:</div>
+        <div class="fetch-err-btns">
+          <a href="https://zalo.me/0993389813" target="_blank" class="ferr-btn ferr-zalo">💬 Zalo</a>
+          <a href="https://t.me/knamknam06" target="_blank" class="ferr-btn ferr-tele">✈️ Telegram</a>
+        </div>
+      </div>`;
   }
 }
 
