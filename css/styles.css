@@ -68,17 +68,20 @@ body::after{
   border:1px solid var(--border);border-radius:12px;
   padding:14px 18px;color:var(--text);
   font-family:'Rajdhani',sans-serif;font-size:15px;
-  margin-bottom:12px;transition:.25s;outline:none;
+  margin-bottom:12px;transition:border-color .25s,box-shadow .25s;outline:none;
+  will-change:auto;
 }
 .auth-field:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,212,255,.1),inset 0 0 20px rgba(0,212,255,.03)}
 .auth-field::placeholder{color:var(--muted)}
 
 .auth-btn{
   width:100%;padding:15px;margin-top:8px;
+  min-height:52px;box-sizing:border-box;
   background:linear-gradient(135deg,#00d4ff,#0066aa);
   border:none;border-radius:12px;
   color:#000;font-family:'Orbitron',monospace;font-weight:700;font-size:12px;letter-spacing:2.5px;
-  cursor:pointer;transition:.25s;position:relative;overflow:hidden;
+  cursor:pointer;transition:box-shadow .25s,transform .25s,opacity .25s;position:relative;overflow:hidden;
+  contain:layout;
 }
 .auth-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent,rgba(255,255,255,.1),transparent);transform:translateX(-100%);transition:.4s}
 .auth-btn:hover::before{transform:translateX(100%)}
