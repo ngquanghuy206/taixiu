@@ -629,3 +629,117 @@ body::after{
   padding:6px 10px;border-radius:8px;
   background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.2);
 }
+
+/* ─── LOBBY LOGO IMG (real imgur) ───────────────────────── */
+.lobby-logo-img{
+  width:80px;height:80px;object-fit:contain;
+  border-radius:12px;
+  filter:drop-shadow(0 0 14px rgba(255,255,255,.25));
+  animation:lobbyFloat 4s ease-in-out infinite;
+}
+
+/* ─── TOPBAR USER INFO ───────────────────────────────────── */
+.topbar-user-block{
+  display:flex;flex-direction:column;align-items:flex-end;gap:2px;
+}
+.user-name-tag{
+  font-family:'Share Tech Mono',monospace;font-size:12px;
+  color:var(--accent);font-weight:700;letter-spacing:.5px;
+}
+.user-role-tag{
+  font-size:9px;color:var(--muted2);letter-spacing:.8px;
+  text-transform:uppercase;
+}
+.topbar-expire-block{
+  font-family:'Courier New',monospace;font-size:11px;
+  font-weight:800;padding:3px 8px;
+  background:rgba(34,197,94,.08);
+  border:1px solid rgba(34,197,94,.2);
+  border-radius:8px;color:#22c55e;
+  letter-spacing:.5px;
+}
+
+/* ─── AUTH LOGO IMAGE ────────────────────────────────────── */
+.auth-logo-img-wrap{
+  width:90px;height:90px;margin:0 auto 12px;
+  border-radius:50%;overflow:hidden;
+  border:2px solid rgba(0,212,255,.3);
+  box-shadow:0 0 30px rgba(0,212,255,.2);
+  animation:robotBob 3s ease-in-out infinite;
+}
+.auth-logo-img{width:100%;height:100%;object-fit:cover}
+
+/* ─── ROBOT GIF + DICE ───────────────────────────────────── */
+.robot-gif-wrap{
+  display:flex;justify-content:center;margin-bottom:6px;
+}
+.robot-gif{
+  width:64px;height:64px;object-fit:contain;
+  border-radius:12px;
+  filter:drop-shadow(0 0 10px rgba(0,212,255,.4));
+}
+.dice-anim-row{
+  display:flex;justify-content:center;gap:6px;
+  margin-bottom:4px;
+}
+.dice-spin{
+  font-size:22px;
+  animation:diceRoll 1.2s ease-in-out infinite;
+  display:inline-block;
+}
+@keyframes diceRoll{
+  0%{transform:rotate(0deg) scale(1)}
+  25%{transform:rotate(90deg) scale(1.2)}
+  50%{transform:rotate(180deg) scale(1)}
+  75%{transform:rotate(270deg) scale(1.2)}
+  100%{transform:rotate(360deg) scale(1)}
+}
+
+/* ─── HISTORY SUMMARY ────────────────────────────────────── */
+.pred-hist-summary{
+  margin-top:8px;
+  padding:6px 10px;
+  background:rgba(255,255,255,.03);
+  border-radius:8px;
+  border:1px solid var(--border);
+}
+.hist-sum-row{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  font-size:12px;
+}
+.hist-sum-item{font-weight:700;font-family:'Share Tech Mono',monospace}
+.hist-sum-item.tai{color:var(--tai)}
+.hist-sum-item.xiu{color:var(--xiu)}
+.hist-sum-sep{color:var(--muted)}
+.hist-chuc-mung{
+  text-align:center;margin-top:5px;min-height:18px;
+}
+.congrats-blink{
+  font-size:11px;font-weight:700;
+  color:#ffd700;
+  animation:blinkGold 0.6s ease-in-out infinite alternate;
+  letter-spacing:.3px;
+}
+@keyframes blinkGold{from{opacity:.4;text-shadow:0 0 0 transparent}to{opacity:1;text-shadow:0 0 8px rgba(255,215,0,.6)}}
+
+/* ─── HOME STATS ROW NGANG ───────────────────────────────── */
+.home-stats-row{
+  display:flex!important;flex-direction:row!important;
+  gap:10px;justify-content:center;margin-bottom:24px;
+  flex-wrap:nowrap;
+}
+.home-stat{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:12px;padding:10px 14px;text-align:center;
+  flex:1;min-width:0;
+}
+.home-stat-val{
+  font-family:'Orbitron',monospace;font-size:16px;font-weight:900;color:var(--accent);
+}
+.home-stat-lbl{font-size:10px;color:var(--muted);letter-spacing:.3px;margin-top:2px}
+
+@media(max-width:400px){
+  .home-stat-val{font-size:13px}
+  .home-stat{padding:8px 8px}
+  .topbar-expire-block{display:none}
+}
