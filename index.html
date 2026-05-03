@@ -2,7 +2,11 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<style>
+/* Ẩn Vercel badge */
+#__vercel_toolbar,vercel-live-feedback,[id^="vercel"],[class*="vercel-toolbar"]{display:none!important;width:0!important;height:0!important;pointer-events:none!important}
+</style>
 <title>Tài Xỉu AI — by Nguyễn Quang Huy Dzi</title>
 
 <!-- ── Favicon / App Icon ── -->
@@ -313,6 +317,25 @@
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeMaintModal()">Huỷ</button>
       <button class="modal-submit" id="maint-confirm-btn" onclick="confirmMaintAction()">XÁC NHẬN</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LỊCH SỬ DỰ ĐOÁN -->
+<div class="hist-modal-overlay hidden" id="hist-modal-overlay" onclick="if(event.target===this)closeHistModal()">
+  <div class="hist-modal">
+    <div class="hist-modal-head">
+      <div class="hist-modal-title" id="hist-modal-title">📋 LỊCH SỬ DỰ ĐOÁN</div>
+      <button class="hist-modal-close" onclick="closeHistModal()">✕</button>
+    </div>
+    <div class="hist-modal-stats" id="hist-modal-stats"></div>
+    <div class="hist-modal-body">
+      <table class="hist-tbl">
+        <thead><tr>
+          <th>Phiên</th><th>Kết Quả</th><th>Dự Đoán</th><th>Kết Luận</th>
+        </tr></thead>
+        <tbody id="hist-tbl-body"></tbody>
+      </table>
     </div>
   </div>
 </div>
