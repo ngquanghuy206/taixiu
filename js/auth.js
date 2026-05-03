@@ -82,8 +82,16 @@ async function doLogin() {
     // Không await getClientIP (có thể chậm) — lấy sau
     getClientIP().then(ip => { window._clientIP = ip; }).catch(() => {});
     await animateLogin();
-    launchApp();
+    btn.disabled = false;
+    btn.innerHTML = "ĐĂNG NHẬP";
+    try {
+      launchApp();
+    } catch(err) {
+      console.error("[doLogin admin] launchApp lỗi:", err);
+      showAuthErr("⚠️ Lỗi khởi động app. Vui lòng thử lại!");
+    }
     return;
+
   }
 
   const users = getUsers();
@@ -114,8 +122,16 @@ async function doLogin() {
   // Phải set _expireAt TRƯỚC launchApp() để topbar countdown hoạt động
   window._expireAt = new Date(acc.expires).getTime();
   await animateLogin();
-  launchApp();
-  startExpireCountdown(acc.expires);
+  // Reset button trước khi launch (phòng lỗi launchApp làm đơ UI)
+  btn.disabled = false;
+  btn.innerHTML = "ĐĂNG NHẬP";
+  try {
+    launchApp();
+    startExpireCountdown(acc.expires);
+  } catch(err) {
+    console.error("[doLogin] launchApp lỗi:", err);
+    showAuthErr("⚠️ Lỗi khởi động app. Vui lòng thử lại!");
+  }
 }
 
 function showAuthErr(msg) {

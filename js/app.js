@@ -73,6 +73,11 @@ function launchApp() {
     showHome();
   } catch(err) {
     console.error("[launchApp] Lỗi:", err);
+    // Reset màn hình auth nếu launch thất bại
+    document.getElementById("auth-screen").style.display = "flex";
+    const appEl = document.getElementById("app");
+    if (appEl) appEl.style.display = "none";
+    throw err; // re-throw để doLogin() biết mà hiện lỗi
   }
 }
 
