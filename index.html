@@ -6,8 +6,8 @@
 <title>Tài Xỉu AI — by Nguyễn Quang Huy Dzi</title>
 
 <!-- ── Favicon / App Icon ── -->
-<link rel="icon" type="image/png" href="https://i.imgur.com/PvqTmpY.jpeg"/>
-<link rel="apple-touch-icon" href="https://i.imgur.com/PvqTmpY.jpeg"/>
+<link rel="icon" type="image/png" href="https://i.imgur.com/LxMIbmY.png"/>
+<link rel="apple-touch-icon" href="https://i.imgur.com/LxMIbmY.png"/>
 
 <!-- ── SEO ── -->
 <meta name="description" content="Tool dự đoán Tài Xỉu AI — 65 thuật toán: Markov, EMA, MACD, Kalman, LSTM... By Nguyễn Quang Huy Dzi"/>
@@ -17,7 +17,7 @@
 <meta property="og:type"        content="website"/>
 <meta property="og:title"       content="🎰 Tài Xỉu AI — Tool Dự Đoán"/>
 <meta property="og:description" content="65 thuật toán AI: Markov, EMA, MACD, Bollinger, Kalman, LSTM... Dự đoán theo thời gian thực. By Nguyễn Quang Huy Dzi"/>
-<meta property="og:image"       content="https://i.imgur.com/PvqTmpY.jpeg"/>
+<meta property="og:image"       content="https://i.imgur.com/LxMIbmY.png"/>
 <meta property="og:image:width"  content="1200"/>
 <meta property="og:image:height" content="630"/>
 <meta property="og:locale"      content="vi_VN"/>
@@ -26,7 +26,7 @@
 <meta name="twitter:card"        content="summary_large_image"/>
 <meta name="twitter:title"       content="🎰 Tài Xỉu AI — Tool Dự Đoán"/>
 <meta name="twitter:description" content="65 thuật toán AI dự đoán Tài Xỉu theo thời gian thực. By Nguyễn Quang Huy Dzi"/>
-<meta name="twitter:image"       content="https://i.imgur.com/PvqTmpY.jpeg"/>
+<meta name="twitter:image"       content="https://i.imgur.com/LxMIbmY.png"/>
 
 <link rel="stylesheet" href="css/styles.css"/>
 </head>
@@ -40,9 +40,7 @@
     <div class="auth-corner tr"></div>
     <div class="auth-corner bl"></div>
     <div class="auth-corner br"></div>
-    <div class="auth-logo-img-wrap">
-      <img src="https://i.imgur.com/PvqTmpY.jpeg" class="auth-logo-img" onerror="this.style.display='none'"/>
-    </div>
+    <span class="auth-robot">🤖</span>
     <div class="auth-logo">TX · AI</div>
     <div class="auth-sub">Tool Dự Đoán · By Nguyễn Quang Huy Dzi</div>
     <input id="inp-user" class="auth-field" type="text" placeholder="Tài khoản" autocomplete="off"/>
@@ -69,9 +67,8 @@
   <div class="topbar">
     <div class="topbar-logo">🎰 TX·AI</div>
     <div class="topbar-center" id="topbar-center"></div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <div class="topbar-user-block" id="user-display"></div>
-      <div class="topbar-expire-block" id="topbar-expire" style="display:none"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="topbar-user" id="user-display"></div>
       <button class="ham-btn" onclick="toggleSidebar()">
         <span></span><span></span><span></span>
       </button>
