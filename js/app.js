@@ -434,21 +434,79 @@ function closePred() { window._predOpen = false; document.getElementById("pred-p
   function onUp() { dragging = false; document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); }
 })();
 
-// ── DATA FETCH — Chỉ lấy từ Supabase database ─────────────
+// ── DATA FETCH ─────────────────────────────────────────────
+window._fetchRetry = {};
+
+// Danh sách CORS proxy fallback (thử lần lượt nếu bị block)
+const CORS_PROXIES = [
+  url => url,                                                          // 1. Thử trực tiếp
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,          // 2. corsproxy.io
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // 3. allorigins
+  url => `https://thingproxy.freeboard.io/fetch/${url}`,              // 4. thingproxy
+];
+
+async function fetchWithCors(url) {
+  const key = "proxy_" + url;
+  // Bắt đầu từ proxy đã thành công lần trước (nếu có)
+  let startIdx = window._workingProxy?.[key] ?? 0;
+  for (let i = startIdx; i < CORS_PROXIES.length; i++) {
+    const proxied = CORS_PROXIES[i](url);
+    try {
+      const r = await fetch(proxied, { signal: AbortSignal.timeout(9000) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const data = await r.json();
+      // Lưu proxy hoạt động để lần sau dùng trước
+      if (!window._workingProxy) window._workingProxy = {};
+      window._workingProxy[key] = i;
+      return data;
+    } catch(e) {
+      if (i === CORS_PROXIES.length - 1) throw e; // hết proxy → throw
+    }
+  }
+}
+
 async function doFetch() {
   if (!window._curApp) return;
   const app = window._curApp;
   const api = APIS[app][window._curApiIdx];
-  await supaLoadFallback(app, api);
+  const key = app + "_" + window._curApiIdx;
+
+  try {
+    const data = await fetchWithCors(api.url);
+    window._fetchRetry[key] = 0;
+    processData(data, app, api);
+  } catch(e) {
+    window._fetchRetry[key] = (window._fetchRetry[key] || 0) + 1;
+    const retries = window._fetchRetry[key];
+    const pb = document.getElementById("pred-body");
+    if (!pb) return;
+
+    // ── Thử load data từ Supabase khi API lỗi ──
+    supaLoadFallback(app, api);
+
+    pb.innerHTML = `
+      <div class="fetch-err-box">
+        <div class="fetch-err-icon">⚠️</div>
+        <div class="fetch-err-title">Lỗi kết nối API</div>
+        <div class="fetch-err-sub">Đã thử ${CORS_PROXIES.length} phương thức kết nối...<br/>Lần ${retries} — Tự động thử lại sau 15 giây</div>
+        <button class="fetch-retry-btn" onclick="doFetch()">🔄 Thử lại ngay</button>
+        <div class="fetch-err-contact">Lỗi kéo dài? Liên hệ hỗ trợ:</div>
+        <div class="fetch-err-btns">
+          <a href="https://zalo.me/0993389813" target="_blank" class="ferr-btn ferr-zalo">💬 Zalo</a>
+          <a href="https://t.me/knamknam06" target="_blank" class="ferr-btn ferr-tele">✈️ Telegram</a>
+        </div>
+        <div id="supa-fallback-status" class="supa-fallback-notice">☁️ Lấy dữ liệu từ AI KING DZI</div>
+      </div>`;
+  }
 }
 
-// Load dữ liệu từ Supabase database
+// Load dữ liệu từ Supabase khi API sảnh lỗi
 async function supaLoadFallback(app, api) {
-  const pb = document.getElementById("pred-body");
+  const statusEl = () => document.getElementById("supa-fallback-status");
   try {
     const hist = await supaFetchHistory(app, api.label);
     if (!hist || !hist.history_json || hist.history_json.length === 0) {
-      if (pb) pb.innerHTML = `<div class="pred-loading"><span>☁️ Đang tải dữ liệu từ AI KING DZI...</span></div>`;
+      if (statusEl()) statusEl().textContent = "🤖 AI KING DZI chưa có dữ liệu cho sảnh này";
       return;
     }
     // Restore history vào state
@@ -460,6 +518,7 @@ async function supaLoadFallback(app, api) {
     if (latestRec) {
       window._lastPhien[app][api.label] = latestRec.phien;
     }
+    if (statusEl()) statusEl().textContent = `☁️ 🤖 AI KING DZI — ${hist.history_json.length} phiên — cập nhật: ${new Date(hist.updated_at).toLocaleTimeString("vi-VN")}`;
 
     // Render lịch sử từ cloud
     renderHistBar(app, api);
@@ -469,7 +528,7 @@ async function supaLoadFallback(app, api) {
     if (pred) supaRenderCloudPred(pred, app, api);
 
   } catch(err) {
-    if (pb) pb.innerHTML = `<div class="pred-loading"><span>⚠️ Không kết nối được AI KING DZI</span></div>`;
+    if (statusEl()) statusEl().textContent = "🤖 Không kết nối được AI KING DZI";
   }
 }
 
@@ -482,8 +541,6 @@ function supaRenderCloudPred(pred, app, api) {
   const barFilled = Math.round((pred.do_tin_cay || 0) / 10);
   const bar = "█".repeat(barFilled) + "░".repeat(10 - barFilled);
   const timeStr = new Date(pred.created_at).toLocaleTimeString("vi-VN");
-  // Phiên sau = phiên hiện tại + 1
-  const nextPhien = pred.phien ? (parseInt(pred.phien) + 1) : "?";
 
   pb.innerHTML = `
     <div class="supa-pred-block">
@@ -491,15 +548,14 @@ function supaRenderCloudPred(pred, app, api) {
         <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcW9oaXVsa2M3bGE4NThpNGcwdmRyazZmaGZwenJ4dzgzNHZkcGt2aSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l0HlBO7eyXzSZkJri/giphy.gif" class="robot-gif" alt="AI Robot"/>
       </div>
       <div class="supa-pred-badge">🤖 AI KING DZI</div>
-      <div class="supa-next-phien-label">Dự đoán phiên sau là</div>
-      <div class="supa-next-phien-num">#${nextPhien}</div>
+      <div class="supa-pred-phien">Phiên #${pred.phien}</div>
       <div class="dice-anim-row"><span class="dice-spin">🎲</span><span class="dice-spin" style="animation-delay:.15s">🎲</span><span class="dice-spin" style="animation-delay:.3s">🎲</span></div>
       <div class="supa-pred-result">${emoji} <span>${pred.du_doan}</span></div>
       <div class="supa-pred-bar">[${bar}] ${pred.do_tin_cay}%</div>
       <div class="supa-pred-votes">🗳️ ${pred.votes}/${pred.total_methods} phương pháp</div>
       <div class="supa-pred-time">⏰ ${timeStr}</div>
+
     </div>`;
-}
 }
 
 // Subscribe realtime khi vào game — nhận data từ Python tool ngay lập tức
