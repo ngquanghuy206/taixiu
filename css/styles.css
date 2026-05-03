@@ -389,3 +389,96 @@ body::after{
 .ai-line b{color:var(--text)}
 .ai-conclude{margin-top:8px;padding:7px 10px;background:rgba(0,212,255,.08);border-radius:8px;font-size:12px;border-left:3px solid var(--accent)}
 .ai-conclude b{color:var(--accent)}
+
+/* ─── LOBBY MAINTENANCE ──────────────────────────────────── */
+.lobby-maint{opacity:.75;cursor:not-allowed}
+.lobby-maint-overlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:6px;background:rgba(0,0,0,.55);
+  backdrop-filter:blur(2px);border-radius:12px 12px 0 0;z-index:5;
+}
+.lobby-maint-overlay span:first-child{font-size:28px}
+.lobby-maint-overlay span:last-child{
+  font-size:11px;font-weight:800;letter-spacing:2px;
+  color:#ff6b35;text-shadow:0 0 10px rgba(255,107,53,.6)
+}
+
+/* ─── LOBBY MANAGER PAGE ─────────────────────────────────── */
+.lobby-mgr-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:16px;padding:16px;max-width:900px;margin:0 auto;
+}
+.lobby-mgr-card{
+  background:var(--card);border:1px solid var(--border);border-radius:16px;
+  overflow:hidden;transition:transform .2s,box-shadow .2s;
+}
+.lobby-mgr-card:hover{transform:translateY(-3px);box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.lmgr-banner{
+  position:relative;height:100px;display:flex;align-items:center;
+  justify-content:center;
+}
+.lmgr-emoji{font-size:36px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
+.lmgr-status-badge{
+  position:absolute;top:10px;right:10px;font-size:10px;font-weight:700;
+  letter-spacing:.5px;padding:4px 10px;border-radius:20px;
+}
+.lmgr-status-badge.online{background:rgba(34,197,94,.2);color:#22c55e;border:1px solid rgba(34,197,94,.3)}
+.lmgr-status-badge.maint{background:rgba(255,107,53,.2);color:#ff6b35;border:1px solid rgba(255,107,53,.3)}
+.lmgr-info{padding:14px 16px 16px}
+.lmgr-name{font-size:16px;font-weight:800;letter-spacing:1px;margin-bottom:12px;color:var(--text)}
+.lmgr-btns{display:flex;gap:8px}
+.lmgr-btn{
+  flex:1;padding:9px 0;border:none;border-radius:10px;font-size:12px;
+  font-weight:700;cursor:pointer;letter-spacing:.5px;transition:all .2s;
+}
+.start-maint{background:linear-gradient(135deg,#ff6b35,#e74c3c);color:#fff}
+.start-maint:hover{opacity:.85;transform:translateY(-1px)}
+.cancel-maint{background:linear-gradient(135deg,#00d4ff,#0099cc);color:#fff}
+.cancel-maint:hover{opacity:.85;transform:translateY(-1px)}
+
+/* ─── AUTH CONTACT NOTICE ────────────────────────────────── */
+.auth-contact-notice{
+  margin:10px 0 4px;padding:10px 14px;border-radius:10px;
+  background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);
+  font-size:12px;color:var(--muted2);line-height:1.6;text-align:center;
+}
+.auth-contact-notice strong{color:var(--accent)}
+.auth-notice-icon{margin-right:5px}
+
+/* ─── SIDEBAR EXPIRE COUNTDOWN ───────────────────────────── */
+.sidebar-expire{
+  margin:12px 16px;padding:12px 14px;border-radius:12px;
+  background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.25);
+  text-align:center;
+}
+.expire-label{font-size:11px;color:var(--muted2);letter-spacing:.5px;margin-bottom:6px}
+.expire-countdown{
+  font-size:20px;font-weight:800;letter-spacing:2px;
+  font-variant-numeric:tabular-nums;
+  color:#ff6b35;text-shadow:0 0 12px rgba(255,107,53,.4);
+  font-family:'Courier New',monospace;
+}
+
+/* ─── ADMIN TABLE TIME CELL ──────────────────────────────── */
+.time-cell{
+  font-family:'Courier New',monospace;font-size:12px;font-weight:700;
+  letter-spacing:.5px;color:var(--green);
+}
+.time-cell.time-warn{color:var(--gold)}
+.time-cell.time-danger{color:#ff6b35;animation:pulse-warn 1s ease-in-out infinite}
+.time-cell.time-expired{color:var(--muted2)}
+@keyframes pulse-warn{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* ─── RENEW BUTTON & MODAL ───────────────────────────────── */
+.act-btn.renew{background:rgba(255,165,0,.15);color:#ffa500;border-color:rgba(255,165,0,.3)}
+.act-btn.renew:hover{background:rgba(255,165,0,.3)}
+.renew-modal-title{
+  background:linear-gradient(135deg,#ffa500,#ff6b35);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.renew-badge{
+  text-align:center;font-size:12px;color:var(--muted2);
+  padding:8px 12px;margin:0 0 16px;border-radius:8px;
+  background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.2);
+}
+.renew-submit-btn{background:linear-gradient(135deg,#ffa500,#ff6b35) !important}
