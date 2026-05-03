@@ -2,6 +2,10 @@
 //  CONFIG — Tài Xỉu AI  |  by Nguyễn Quang Huy Dzi
 // ═══════════════════════════════════════════════════════════
 
+// ── SUPABASE ────────────────────────────────────────────────
+const SUPA_URL = "https://rspqnrvciwqudeterpbl.supabase.co";
+const SUPA_KEY = "sb_publishable_DcRnyAQHhdAeqCEv8a5ELQ_k4hO9eSm";
+
 const ADMIN_USER = "ngquanghuy206";
 const ADMIN_PASS = "nqh300506";
 

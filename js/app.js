@@ -226,6 +226,10 @@ function openGame(app) {
   clearInterval(window._fetchTimer);
   window._fetchTimer = setInterval(doFetch, 15000);
 
+  // Realtime từ Supabase — nhận data ngay cả khi API sảnh lỗi
+  const curApi = APIS[app][window._curApiIdx];
+  supaStartGameRealtime(app, curApi);
+
   // show calc animation
   showCalcEffect();
 }
@@ -423,6 +427,10 @@ async function doFetch() {
     const retries = window._fetchRetry[key];
     const pb = document.getElementById("pred-body");
     if (!pb) return;
+
+    // ── Thử load data từ Supabase khi API lỗi ──
+    supaLoadFallback(app, api);
+
     pb.innerHTML = `
       <div class="fetch-err-box">
         <div class="fetch-err-icon">⚠️</div>
@@ -434,8 +442,88 @@ async function doFetch() {
           <a href="https://zalo.me/0993389813" target="_blank" class="ferr-btn ferr-zalo">💬 Zalo</a>
           <a href="https://t.me/knamknam06" target="_blank" class="ferr-btn ferr-tele">✈️ Telegram</a>
         </div>
+        <div id="supa-fallback-status" class="supa-fallback-notice">☁️ Đang tải dữ liệu từ cloud...</div>
       </div>`;
   }
+}
+
+// Load dữ liệu từ Supabase khi API sảnh lỗi
+async function supaLoadFallback(app, api) {
+  const statusEl = () => document.getElementById("supa-fallback-status");
+  try {
+    const hist = await supaFetchHistory(app, api.label);
+    if (!hist || !hist.history_json || hist.history_json.length === 0) {
+      if (statusEl()) statusEl().textContent = "☁️ Chưa có dữ liệu cloud cho sảnh này";
+      return;
+    }
+    // Restore history vào state
+    window._histData[app][api.label] = [...hist.history_json];
+    if (hist.stats_json) {
+      window._statData[app][api.label] = { d: hist.stats_json.dung || 0, s: hist.stats_json.sai || 0 };
+    }
+    const latestRec = hist.history_json[hist.history_json.length - 1];
+    if (latestRec) {
+      window._lastPhien[app][api.label] = latestRec.phien;
+    }
+    if (statusEl()) statusEl().textContent = `☁️ Đã tải ${hist.history_json.length} phiên từ cloud — cập nhật: ${new Date(hist.updated_at).toLocaleTimeString("vi-VN")}`;
+
+    // Render lịch sử từ cloud
+    renderHistBar(app, api);
+
+    // Fetch + hiển thị dự đoán mới nhất từ cloud
+    const pred = await supaFetchLatestPred(app, api.label);
+    if (pred) supaRenderCloudPred(pred, app, api);
+
+  } catch(err) {
+    if (statusEl()) statusEl().textContent = "☁️ Không kết nối được cloud";
+  }
+}
+
+// Hiển thị dự đoán lấy từ Supabase cloud
+function supaRenderCloudPred(pred, app, api) {
+  const RE_LOCAL = { "Tài":"🔴","Xỉu":"🔵","Chẵn":"🟢","Lẻ":"🟡" };
+  const pb = document.getElementById("pred-body");
+  if (!pb) return;
+  const emoji = RE_LOCAL[pred.du_doan] || "⬜";
+  const barFilled = Math.round((pred.do_tin_cay || 0) / 10);
+  const bar = "█".repeat(barFilled) + "░".repeat(10 - barFilled);
+  const timeStr = new Date(pred.created_at).toLocaleTimeString("vi-VN");
+
+  pb.innerHTML = `
+    <div class="supa-pred-block">
+      <div class="supa-pred-badge">☁️ DỮ LIỆU CLOUD</div>
+      <div class="supa-pred-phien">Phiên #${pred.phien}</div>
+      <div class="supa-pred-result">${emoji} <span>${pred.du_doan}</span></div>
+      <div class="supa-pred-bar">[${bar}] ${pred.do_tin_cay}%</div>
+      <div class="supa-pred-votes">🗳️ ${pred.votes}/${pred.total_methods} phương pháp</div>
+      <div class="supa-pred-time">⏰ ${timeStr}</div>
+      <div class="supa-pred-note">⚠️ API sảnh đang lỗi — hiển thị dữ liệu từ Python tool</div>
+    </div>`;
+}
+
+// Subscribe realtime khi vào game — nhận data từ Python tool ngay lập tức
+async function supaStartGameRealtime(app, api) {
+  await supaSubscribeResults(app, api.label, row => {
+    // Có phiên mới từ Python → cập nhật history và render
+    if (window._lastPhien[app]?.[api.label] === row.phien) return;
+    window._lastPhien[app][api.label] = row.phien;
+    const rec = {
+      phien: row.phien, ket_qua: row.ket_qua, tong: row.tong,
+      xuc_xac_1: row.xuc_xac_1, xuc_xac_2: row.xuc_xac_2, xuc_xac_3: row.xuc_xac_3,
+      ket_qua_truyen_thong: row.ket_qua_truyen_thong,
+      ket_qua_chi_tiet: row.ket_qua_chi_tiet,
+    };
+    if (!window._histData[app]?.[api.label]) return;
+    window._histData[app][api.label].push(rec);
+    if (window._histData[app][api.label].length > 80) window._histData[app][api.label].shift();
+    renderHistBar(app, api);
+    showToast(`☁️ Phiên mới từ cloud: #${row.phien} — ${row.ket_qua || row.ket_qua_truyen_thong || ""}`, "info");
+  });
+
+  await supaSubscribePredictions(app, api.label, row => {
+    // Có dự đoán mới từ Python
+    supaRenderCloudPred(row, app, api);
+  });
 }
 
 function processData(data, app, api) {
