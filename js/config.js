@@ -39,11 +39,11 @@ function isUnderMaintenance(app) { return !!getMaintenance()[app]; }
 
 // Logo ảnh thật từ imgur
 const BRAND_IMG = {
-  sunwin:   "https://i.imgur.com/zLTIJFJ.png",
-  xocdia88: "https://i.imgur.com/RrjpISS.png",
-  hitclub:  "https://i.imgur.com/Q3NRQHQ.png",
-  lc79:     "https://i.imgur.com/ZYr1IEi.png",
-  betvip:   "https://i.imgur.com/TFt0SmI.png",
+  sunwin:   "https://i.imgur.com/sunwin.jpg",
+  xocdia88: "https://i.imgur.com/xocdia88.jpg",
+  hitclub:  "https://i.imgur.com/hitclub.jpg",
+  lc79:     "https://i.imgur.com/lc79.jpg",
+  betvip:   "https://i.imgur.com/betvip.jpg",
 };
 const BRAND_EMOJI = { sunwin:"☀️", xocdia88:"🎯", hitclub:"🎪", lc79:"🎲", betvip:"💎" };
 const BRAND_COLOR = { sunwin:"#FFD700", xocdia88:"#FF4500", hitclub:"#00CED1", lc79:"#7B68EE", betvip:"#FF69B4" };
