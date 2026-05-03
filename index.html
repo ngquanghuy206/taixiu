@@ -209,7 +209,7 @@
                 <th>Tài Khoản</th>
                 <th>Trạng Thái</th>
                 <th>⏱ Thời Gian Còn Lại</th>
-                <th>IP Thiết Bị</th>
+                <th>📱 Thiết Bị</th>
                 <th>Thao Tác</th>
               </tr>
             </thead>
@@ -286,6 +286,11 @@
       <label class="modal-label">Thời hạn (ngày)</label>
       <input id="m-days" class="modal-input" type="number" placeholder="30" min="1"/>
     </div>
+    <div class="modal-field">
+      <label class="modal-label">📱 Số thiết bị được dùng</label>
+      <input id="m-devices" class="modal-input" type="number" placeholder="1" min="1" max="10" value="1"/>
+    </div>
+    <input id="m-orig-expires" type="hidden" value=""/>
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeModal()">Huỷ</button>
       <button class="modal-submit" onclick="submitUser()">XÁC NHẬN</button>
