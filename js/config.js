@@ -21,12 +21,17 @@ const APIS = {
 };
 
 const LOBBY_URLS = {
-  sunwin:   "https://sunwin.vn",
-  xocdia88: "https://xocdia88.com",
-  hitclub:  "https://hitclub.pro",
-  lc79:     "https://lc79.io",
-  betvip:   "https://betvip.pro",
+  sunwin:   "https://sunwin.mw",
+  xocdia88: "https://play.xocdia88.green",
+  hitclub:  "https://v.hitclub.si/?a=hitclub",
+  lc79:     "https://lc79c.bet",
+  betvip:   "https://play.betvip.fit/?utm_source=seo&utm_campaign=betvip.mobi&utm_medium=betvip.mobi&utm_term=betvip.mobi",
 };
+
+// ── MAINTENANCE STATE ───────────────────────────────────────
+function getMaintenance() { return JSON.parse(localStorage.getItem("tx_maintenance") || "{}"); }
+function saveMaintenance(m) { localStorage.setItem("tx_maintenance", JSON.stringify(m)); }
+function isUnderMaintenance(app) { return !!getMaintenance()[app]; }
 
 const BRAND_EMOJI = { sunwin:"☀️", xocdia88:"🎯", hitclub:"🎪", lc79:"🎲", betvip:"💎" };
 const BRAND_COLOR = { sunwin:"#FFD700", xocdia88:"#FF4500", hitclub:"#00CED1", lc79:"#7B68EE", betvip:"#FF69B4" };

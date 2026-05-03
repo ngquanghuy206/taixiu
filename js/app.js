@@ -19,6 +19,10 @@ function launchApp() {
   app.style.display = "flex";
   app.style.flexDirection = "column";
   document.getElementById("nav-admin").style.display = window._isAdmin ? "flex" : "none";
+  document.getElementById("nav-lobby-mgr").style.display = window._isAdmin ? "flex" : "none";
+  // Hiện countdown chỉ cho user khách
+  const expireBox = document.getElementById("sidebar-expire");
+  if (expireBox) expireBox.style.display = window._isAdmin ? "none" : "block";
   document.getElementById("user-display").textContent = window._curUser;
   buildLobbies();
   showHome();
@@ -36,17 +40,17 @@ function closeSidebar() {
 
 // ── PAGES ─────────────────────────────────────────────────
 function setActivePage(name) {
-  ["home","game","admin"].forEach(p => {
+  ["home","game","admin","lobby-mgr"].forEach(p => {
     const el = document.getElementById("page-" + p);
     if (!el) return;
     if (p === "game") el.style.display = name === "game" ? "flex" : "none";
-    else if (p === "admin") el.style.display = name === "admin" ? "block" : "none";
-    else el.style.display = name === "home" ? "block" : "none";
+    else el.style.display = name === p ? "block" : "none";
   });
 }
 
 function showHome() {
   clearInterval(window._fetchTimer); window._fetchTimer = null;
+  if (window._adminTableTimer) { clearInterval(window._adminTableTimer); window._adminTableTimer = null; }
   const iframe = document.getElementById("game-iframe");
   if (iframe) iframe.src = "about:blank";
   setActivePage("home");
@@ -62,8 +66,85 @@ function showAdmin() {
   document.getElementById("topbar-center").innerHTML = "";
   document.getElementById("nav-home")?.classList.remove("active");
   document.getElementById("nav-admin")?.classList.add("active");
+  document.getElementById("nav-lobby-mgr")?.classList.remove("active");
   closeSidebar();
   renderUsers();
+}
+
+// ── LOBBY MANAGER ─────────────────────────────────────────
+function showLobbyManager() {
+  clearInterval(window._fetchTimer); window._fetchTimer = null;
+  setActivePage("lobby-mgr");
+  document.getElementById("topbar-center").innerHTML = "";
+  document.getElementById("nav-home")?.classList.remove("active");
+  document.getElementById("nav-admin")?.classList.remove("active");
+  document.getElementById("nav-lobby-mgr")?.classList.add("active");
+  closeSidebar();
+  renderLobbyManager();
+}
+
+function renderLobbyManager() {
+  const g = document.getElementById("lobby-mgr-grid");
+  g.innerHTML = "";
+  const maint = getMaintenance();
+  Object.entries(APIS).forEach(([app]) => {
+    const em   = BRAND_EMOJI[app] || "🎰";
+    const grad = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";
+    const col  = BRAND_COLOR[app] || "#00d4ff";
+    const isMaint = !!maint[app];
+    const card = document.createElement("div");
+    card.className = "lobby-mgr-card";
+    card.innerHTML = `
+      <div class="lmgr-banner" style="background:${grad}">
+        <div class="lmgr-emoji">${em}</div>
+        <div class="lmgr-status-badge ${isMaint ? "maint" : "online"}">${isMaint ? "🔧 BẢO TRÌ" : "✅ ONLINE"}</div>
+      </div>
+      <div class="lmgr-info">
+        <div class="lmgr-name">${app.toUpperCase()}</div>
+        <div class="lmgr-btns">
+          ${isMaint
+            ? `<button class="lmgr-btn cancel-maint" onclick="askMaintenance('${app}', false)">✅ Huỷ Bảo Trì</button>`
+            : `<button class="lmgr-btn start-maint" onclick="askMaintenance('${app}', true)">🔧 Bảo Trì</button>`
+          }
+        </div>
+      </div>`;
+    g.appendChild(card);
+  });
+}
+
+let _maintTarget = null;
+let _maintAction = false;
+
+function askMaintenance(app, enable) {
+  _maintTarget = app;
+  _maintAction = enable;
+  const title  = enable ? "XÁC NHẬN BẢO TRÌ" : "HUỶ BẢO TRÌ";
+  const body   = enable
+    ? `Admin có chắc chắn muốn bảo trì sảnh <strong style="color:#ffd700">${app.toUpperCase()}</strong> không?<br/><br/>Người dùng sẽ không vào được sảnh này khi đang bảo trì.`
+    : `Xác nhận huỷ bảo trì sảnh <strong style="color:#00d4ff">${app.toUpperCase()}</strong>?<br/><br/>Người dùng sẽ vào được sảnh bình thường sau khi huỷ.`;
+  document.getElementById("maint-modal-title").textContent = title;
+  document.getElementById("maint-modal-body").innerHTML   = body;
+  const btn = document.getElementById("maint-confirm-btn");
+  btn.textContent = enable ? "BẢO TRÌ NGAY" : "HUỶ BẢO TRÌ";
+  btn.style.background = enable ? "linear-gradient(135deg,#ff6b35,#e74c3c)" : "linear-gradient(135deg,#00d4ff,#0099cc)";
+  document.getElementById("maint-overlay").classList.remove("hidden");
+}
+
+function closeMaintModal() { document.getElementById("maint-overlay").classList.add("hidden"); }
+
+function confirmMaintAction() {
+  const maint = getMaintenance();
+  if (_maintAction) {
+    maint[_maintTarget] = true;
+    showToast(`🔧 Sảnh ${_maintTarget.toUpperCase()} đang bảo trì`);
+  } else {
+    delete maint[_maintTarget];
+    showToast(`✅ Sảnh ${_maintTarget.toUpperCase()} đã hoạt động trở lại`);
+  }
+  saveMaintenance(maint);
+  closeMaintModal();
+  renderLobbyManager();
+  buildLobbies(); // refresh home lobby grid
 }
 
 function goHome() { showHome(); }
@@ -72,12 +153,14 @@ function goHome() { showHome(); }
 function buildLobbies() {
   const g = document.getElementById("lobby-grid");
   g.innerHTML = "";
+  const maint = getMaintenance();
   Object.entries(APIS).forEach(([app, apis]) => {
-    const em   = BRAND_EMOJI[app] || "🎰";
-    const grad = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";
-    const col  = BRAND_COLOR[app] || "#00d4ff";
-    const c    = document.createElement("div");
-    c.className = "lobby-card";
+    const em      = BRAND_EMOJI[app] || "🎰";
+    const grad    = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";
+    const col     = BRAND_COLOR[app] || "#00d4ff";
+    const isMaint = !!maint[app];
+    const c       = document.createElement("div");
+    c.className   = "lobby-card" + (isMaint ? " lobby-maint" : "");
     c.innerHTML = `
       <div class="lobby-banner" style="background:${grad}">
         <div class="lobby-banner-inner">
@@ -85,6 +168,7 @@ function buildLobbies() {
           <div class="lobby-glow-ring" style="border-color:${col}40"></div>
         </div>
         <div class="lobby-badge">${apis.length} API</div>
+        ${isMaint ? `<div class="lobby-maint-overlay"><span>🔧</span><span>BẢO TRÌ</span></div>` : ""}
         <div class="lobby-particles">
           <span></span><span></span><span></span>
         </div>
@@ -92,9 +176,9 @@ function buildLobbies() {
       <div class="lobby-info">
         <div class="lobby-name">${app.toUpperCase()}</div>
         <div class="lobby-apis">${apis.map(a => a.label).join(" · ")}</div>
-        <div class="lobby-enter" style="color:${col}">Vào sảnh →</div>
+        <div class="lobby-enter" style="color:${isMaint ? "#ff6b35" : col}">${isMaint ? "🔧 Đang bảo trì" : "Vào sảnh →"}</div>
       </div>`;
-    c.onclick = () => openGame(app);
+    c.onclick = () => isMaint ? showToast("🔧 Chức năng này đang được bảo trì!", "warn") : openGame(app);
     g.appendChild(c);
     // animate in
     setTimeout(() => c.classList.add("visible"), 50 * Object.keys(APIS).indexOf(app));
