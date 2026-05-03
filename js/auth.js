@@ -6,24 +6,24 @@ const _SH = () => ({
   "apikey":        SUPA_KEY,
   "Authorization": `Bearer ${SUPA_KEY}`,
   "Content-Type":  "application/json",
-  "Prefer":        "return=representation",
 });
 
 // ── USERS (Supabase) ────────────────────────────────────────
 async function getUsers() {
   try {
-    const r = await fetch(`${SUPA_URL}/rest/v1/tx_users?select=*`, { headers: _SH() });
+    const r = await fetch(`${SUPA_URL}/rest/v1/tx_users?select=*&order=created_at.asc`, { headers: _SH() });
+    if (!r.ok) { console.error("getUsers lỗi:", await r.text()); return []; }
     return await r.json();
-  } catch { return []; }
+  } catch(e) { console.error("getUsers exception:", e); return []; }
 }
 
 async function saveUser(obj) {
-  // upsert theo username
-  await fetch(`${SUPA_URL}/rest/v1/tx_users`, {
+  const r = await fetch(`${SUPA_URL}/rest/v1/tx_users`, {
     method: "POST",
     headers: { ..._SH(), "Prefer": "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify(obj),
   });
+  if (!r.ok) console.error("saveUser lỗi:", await r.text());
 }
 
 async function deleteUser(username) {
@@ -36,17 +36,19 @@ async function deleteUser(username) {
 async function getDeviceList(username) {
   try {
     const r = await fetch(`${SUPA_URL}/rest/v1/tx_ipmap?username=eq.${encodeURIComponent(username)}&select=devices`, { headers: _SH() });
+    if (!r.ok) return [];
     const rows = await r.json();
     return rows[0]?.devices || [];
   } catch { return []; }
 }
 
 async function saveDeviceList(username, devices) {
-  await fetch(`${SUPA_URL}/rest/v1/tx_ipmap`, {
+  const r = await fetch(`${SUPA_URL}/rest/v1/tx_ipmap`, {
     method: "POST",
     headers: { ..._SH(), "Prefer": "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify({ username, devices }),
   });
+  if (!r.ok) console.error("saveDeviceList lỗi:", await r.text());
 }
 
 async function resetDeviceList(username) {
