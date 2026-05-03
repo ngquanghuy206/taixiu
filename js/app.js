@@ -642,14 +642,14 @@ function renderHistBar(app, api) {
   }
   const taiLabel = lb[0]; const xiuLabel = lb[1];
   const taiEmoji = RE[taiLabel] || "🔴"; const xiuEmoji = RE[xiuLabel] || "🔵";
-  summaryEl.innerHTML = \`
+  summaryEl.innerHTML = `
     <div class="hist-sum-row">
-      <span class="hist-sum-item tai">\${taiEmoji} \${taiLabel}: <strong>\${tai}</strong></span>
+      <span class="hist-sum-item tai">${taiEmoji} ${taiLabel}: <strong>${tai}</strong></span>
       <span class="hist-sum-sep">·</span>
-      <span class="hist-sum-item xiu">\${xiuEmoji} \${xiuLabel}: <strong>\${xiu}</strong></span>
+      <span class="hist-sum-item xiu">${xiuEmoji} ${xiuLabel}: <strong>${xiu}</strong></span>
     </div>
     <div class="hist-chuc-mung" id="hist-chuc-mung"></div>
-  \`;
+  `;
 }
 
 // ── RENDER PREDICTION ──────────────────────────────────────
