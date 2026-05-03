@@ -411,6 +411,11 @@ function buildApiTabs() {
 function switchApi(i) {
   window._curApiIdx = i;
   document.querySelectorAll(".api-tab").forEach((t, j) => t.classList.toggle("active", j === i));
+  // Restart realtime subscription cho api tab mới
+  const app = window._curApp;
+  if (app && APIS[app]?.[i]) {
+    supaUnsubscribeAll().then(() => supaStartGameRealtime(app, APIS[app][i]));
+  }
   doFetch();
 }
 
@@ -532,6 +537,9 @@ function supaRenderCloudPred(pred, app, api) {
 // Subscribe realtime khi vào game — nhận data từ Python tool ngay lập tức
 async function supaStartGameRealtime(app, api) {
   await supaSubscribeResults(app, api.label, row => {
+    // ── GUARD: chỉ xử lý khi đúng sảnh + api đang xem ──
+    if (window._curApp !== app) return;
+    if (APIS[app]?.[window._curApiIdx]?.label !== api.label) return;
     // Có phiên mới từ Python → cập nhật history và render
     if (window._lastPhien[app]?.[api.label] === row.phien) return;
     window._lastPhien[app][api.label] = row.phien;
@@ -576,6 +584,9 @@ async function supaStartGameRealtime(app, api) {
   });
 
   await supaSubscribePredictions(app, api.label, row => {
+    // ── GUARD: chỉ xử lý khi đúng sảnh + api đang xem ──
+    if (window._curApp !== app) return;
+    if (APIS[app]?.[window._curApiIdx]?.label !== api.label) return;
     // Có dự đoán mới từ Python → lưu pending và render
     if (!window._pendingPred[app]) window._pendingPred[app] = {};
     // Lấy phiên hiện tại để track

@@ -106,14 +106,23 @@ async function doLogin() {
     btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
   }
 
-  // IP check
-  const ip    = await getClientIP();
-  const ipMap = getIPMap();
-  if (ipMap[u] && ipMap[u] !== ip) {
-    showAuthErr(`⚠️ Tài khoản đang được dùng trên thiết bị khác!\nIP đã đăng ký: ${ipMap[u].slice(0,8)}...`);
-    btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
+  // IP / Device check — hỗ trợ maxDevices
+  const ip      = await getClientIP();
+  const ipMap   = getIPMap();
+  const maxDev  = acc.maxDevices || 1;
+  // ipMap[u] có thể là string (cũ) hoặc array (mới)
+  let devList = ipMap[u];
+  if (!devList) devList = [];
+  else if (typeof devList === "string") devList = [devList]; // migrate data cũ
+  if (!devList.includes(ip)) {
+    if (devList.length >= maxDev) {
+      showAuthErr(`⚠️ Tài khoản chỉ dùng được trên ${maxDev} thiết bị!\nLiên hệ admin để được hỗ trợ.`);
+      btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
+    }
+    devList.push(ip);
+    ipMap[u] = devList;
+    saveIPMap(ipMap);
   }
-  if (!ipMap[u]) { ipMap[u] = ip; saveIPMap(ipMap); }
 
   window._curUser  = u;
   window._isAdmin  = false;
@@ -128,6 +137,11 @@ async function doLogin() {
   try {
     launchApp();
     startExpireCountdown(acc.expires);
+    // Thông báo thiết bị sau khi vào app
+    const usedDev = devList.length;
+    setTimeout(() => {
+      showToast(`📱 Tài khoản này được dùng tối đa ${maxDev} thiết bị · Đang dùng: ${usedDev}/${maxDev}`, "ok");
+    }, 800);
   } catch(err) {
     console.error("[doLogin] launchApp lỗi:", err);
     showAuthErr("⚠️ Lỗi khởi động app. Vui lòng thử lại!");
@@ -194,7 +208,6 @@ function renderUsers() {
 
 function _doRenderUsers() {
   const users = getUsers();
-  const ipMap = getIPMap();
   const tb = document.getElementById("user-list");
   if (!tb) { clearInterval(window._adminTableTimer); return; }
   tb.innerHTML = "";
@@ -208,18 +221,22 @@ function _doRenderUsers() {
     const exp   = new Date(u.expires);
     const left  = exp - new Date();
     const ok    = left > 0;
-    const boundIP = ipMap[u.username] || "—";
+    const ipMap   = getIPMap();
+    let devList   = ipMap[u.username];
+    if (typeof devList === "string") devList = [devList];
+    const usedDev = Array.isArray(devList) ? devList.length : 0;
+    const maxDev  = u.maxDevices || 1;
     const timeStr = ok ? formatTimeLeft(left) : "—";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><strong>${u.username}</strong></td>
       <td><span class="sbadge ${ok ? "active" : "expired"}">${ok ? "Hoạt động" : "Hết hạn"}</span></td>
       <td class="time-cell ${ok ? (left < 3600000 ? "time-danger" : left < 86400000 ? "time-warn" : "") : "time-expired"}">${timeStr}</td>
-      <td class="ip-cell" title="${boundIP}">${boundIP === "—" ? "—" : boundIP.slice(0,12)+"..."}</td>
+      <td style="text-align:center;font-size:12px"><span style="color:${usedDev>=maxDev?"#ef4444":"#22c55e"}">${usedDev}</span>/<span style="color:#ffd700">${maxDev}</span> 📱</td>
       <td class="actions-cell">
         <button class="act-btn edit" onclick="openEdit(${i})" title="Sửa">✏️</button>
         ${!ok ? `<button class="act-btn renew" onclick="openRenew(${i})" title="Gia hạn">🔁</button>` : ""}
-        <button class="act-btn ip-reset" onclick="resetIP('${u.username}')" title="Reset IP">🔄</button>
+        <button class="act-btn ip-reset" onclick="resetIP('${u.username}')" title="Reset thiết bị">🔄</button>
         <button class="act-btn del" onclick="delUser(${i})" title="Xoá">🗑️</button>
       </td>`;
     tb.appendChild(tr);
@@ -230,11 +247,13 @@ function _doRenderUsers() {
 }
 
 function resetIP(username) {
-  if (!confirm(`Reset IP cho tài khoản "${username}"?\nTài khoản này sẽ có thể đăng nhập từ thiết bị mới.`)) return;
-  const ipMap = getIPMap();
+  const ipMap   = getIPMap();
+  const devList = ipMap[username];
+  const count   = Array.isArray(devList) ? devList.length : (devList ? 1 : 0);
+  if (!confirm(`Reset thiết bị cho tài khoản "${username}"?\nHiện đang bind ${count} thiết bị.\nSau khi reset, tài khoản có thể đăng nhập từ thiết bị mới.`)) return;
   delete ipMap[username];
   saveIPMap(ipMap);
-  showToast(`✅ Đã reset IP cho ${username}`);
+  showToast(`✅ Đã reset thiết bị cho ${username}`);
   renderUsers();
 }
 
@@ -244,6 +263,8 @@ function openCreate() {
   document.getElementById("m-user").value = "";
   document.getElementById("m-pass").value = "";
   document.getElementById("m-days").value = "30";
+  document.getElementById("m-devices").value = "1";
+  document.getElementById("m-orig-expires").value = "";
   document.getElementById("modal-overlay").classList.remove("hidden");
   setTimeout(() => document.getElementById("m-user").focus(), 100);
 }
@@ -254,7 +275,11 @@ function openEdit(i) {
   document.getElementById("modal-title").textContent = "CHỈNH SỬA TÀI KHOẢN";
   document.getElementById("m-user").value = u.username;
   document.getElementById("m-pass").value = u.password;
-  const d = Math.max(1, Math.round((new Date(u.expires) - new Date()) / 86400000));
+  // Lưu expires gốc vào hidden field để không bị tính lại sai
+  document.getElementById("m-orig-expires").value = u.expires;
+  // Hiển thị số ngày còn lại thực tế (không được tính lại khi submit)
+  const left = new Date(u.expires) - new Date();
+  const d = left > 0 ? Math.round(left / 86400000) : 0;
   document.getElementById("m-days").value = d;
   document.getElementById("modal-overlay").classList.remove("hidden");
 }
@@ -266,15 +291,25 @@ function submitUser() {
   const p = document.getElementById("m-pass").value.trim();
   const d = parseInt(document.getElementById("m-days").value) || 30;
   if (!u || !p) { showToast("⚠️ Vui lòng điền đầy đủ", "warn"); return; }
-  const exp   = new Date(Date.now() + d * 86400000).toISOString();
   const users = getUsers();
   if (_editIdx >= 0) {
-    users[_editIdx] = { username: u, password: p, expires: exp };
+    // Khi EDIT: giữ nguyên expires gốc, không tính lại từ Date.now()
+    // Chỉ tính lại nếu admin thay đổi số ngày khác với ngày còn lại hiện tại
+    const origExpires = document.getElementById("m-orig-expires").value;
+    const origLeft    = new Date(origExpires) - new Date();
+    const origDays    = origLeft > 0 ? Math.round(origLeft / 86400000) : 0;
+    const exp = (d !== origDays)
+      ? new Date(Date.now() + d * 86400000).toISOString()  // admin đổi số ngày → tính lại
+      : origExpires;                                         // giữ nguyên expires gốc
+    const maxDevices = parseInt(document.getElementById("m-devices").value) || 1;
+    users[_editIdx] = { ...users[_editIdx], username: u, password: p, expires: exp, maxDevices };
     showToast(`✅ Đã cập nhật tài khoản ${u}`);
   } else {
     if (users.find(x => x.username === u)) { showToast("⚠️ Tài khoản đã tồn tại!", "warn"); return; }
-    users.push({ username: u, password: p, expires: exp });
-    showToast(`✅ Đã tạo tài khoản ${u}`);
+    const exp = new Date(Date.now() + d * 86400000).toISOString();
+    const maxDevices = parseInt(document.getElementById("m-devices").value) || 1;
+    users.push({ username: u, password: p, expires: exp, maxDevices });
+    showToast(`✅ Đã tạo tài khoản ${u} · ${maxDevices} thiết bị · ${d} ngày`);
   }
   saveUsers(users);
   closeModal();
