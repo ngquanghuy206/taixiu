@@ -434,79 +434,21 @@ function closePred() { window._predOpen = false; document.getElementById("pred-p
   function onUp() { dragging = false; document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); }
 })();
 
-// ── DATA FETCH ─────────────────────────────────────────────
-window._fetchRetry = {};
-
-// Danh sách CORS proxy fallback (thử lần lượt nếu bị block)
-const CORS_PROXIES = [
-  url => url,                                                          // 1. Thử trực tiếp
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,          // 2. corsproxy.io
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, // 3. allorigins
-  url => `https://thingproxy.freeboard.io/fetch/${url}`,              // 4. thingproxy
-];
-
-async function fetchWithCors(url) {
-  const key = "proxy_" + url;
-  // Bắt đầu từ proxy đã thành công lần trước (nếu có)
-  let startIdx = window._workingProxy?.[key] ?? 0;
-  for (let i = startIdx; i < CORS_PROXIES.length; i++) {
-    const proxied = CORS_PROXIES[i](url);
-    try {
-      const r = await fetch(proxied, { signal: AbortSignal.timeout(9000) });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      const data = await r.json();
-      // Lưu proxy hoạt động để lần sau dùng trước
-      if (!window._workingProxy) window._workingProxy = {};
-      window._workingProxy[key] = i;
-      return data;
-    } catch(e) {
-      if (i === CORS_PROXIES.length - 1) throw e; // hết proxy → throw
-    }
-  }
-}
-
+// ── DATA FETCH — Chỉ lấy từ Supabase database ─────────────
 async function doFetch() {
   if (!window._curApp) return;
   const app = window._curApp;
   const api = APIS[app][window._curApiIdx];
-  const key = app + "_" + window._curApiIdx;
-
-  try {
-    const data = await fetchWithCors(api.url);
-    window._fetchRetry[key] = 0;
-    processData(data, app, api);
-  } catch(e) {
-    window._fetchRetry[key] = (window._fetchRetry[key] || 0) + 1;
-    const retries = window._fetchRetry[key];
-    const pb = document.getElementById("pred-body");
-    if (!pb) return;
-
-    // ── Thử load data từ Supabase khi API lỗi ──
-    supaLoadFallback(app, api);
-
-    pb.innerHTML = `
-      <div class="fetch-err-box">
-        <div class="fetch-err-icon">⚠️</div>
-        <div class="fetch-err-title">Lỗi kết nối API</div>
-        <div class="fetch-err-sub">Đã thử ${CORS_PROXIES.length} phương thức kết nối...<br/>Lần ${retries} — Tự động thử lại sau 15 giây</div>
-        <button class="fetch-retry-btn" onclick="doFetch()">🔄 Thử lại ngay</button>
-        <div class="fetch-err-contact">Lỗi kéo dài? Liên hệ hỗ trợ:</div>
-        <div class="fetch-err-btns">
-          <a href="https://zalo.me/0993389813" target="_blank" class="ferr-btn ferr-zalo">💬 Zalo</a>
-          <a href="https://t.me/knamknam06" target="_blank" class="ferr-btn ferr-tele">✈️ Telegram</a>
-        </div>
-        <div id="supa-fallback-status" class="supa-fallback-notice">☁️ Lấy dữ liệu từ AI KING DZI</div>
-      </div>`;
-  }
+  await supaLoadFallback(app, api);
 }
 
-// Load dữ liệu từ Supabase khi API sảnh lỗi
+// Load dữ liệu từ Supabase database
 async function supaLoadFallback(app, api) {
-  const statusEl = () => document.getElementById("supa-fallback-status");
+  const pb = document.getElementById("pred-body");
   try {
     const hist = await supaFetchHistory(app, api.label);
     if (!hist || !hist.history_json || hist.history_json.length === 0) {
-      if (statusEl()) statusEl().textContent = "🤖 AI KING DZI chưa có dữ liệu cho sảnh này";
+      if (pb) pb.innerHTML = `<div class="pred-loading"><span>☁️ Đang tải dữ liệu từ AI KING DZI...</span></div>`;
       return;
     }
     // Restore history vào state
@@ -518,7 +460,6 @@ async function supaLoadFallback(app, api) {
     if (latestRec) {
       window._lastPhien[app][api.label] = latestRec.phien;
     }
-    if (statusEl()) statusEl().textContent = `☁️ 🤖 AI KING DZI — ${hist.history_json.length} phiên — cập nhật: ${new Date(hist.updated_at).toLocaleTimeString("vi-VN")}`;
 
     // Render lịch sử từ cloud
     renderHistBar(app, api);
@@ -528,7 +469,7 @@ async function supaLoadFallback(app, api) {
     if (pred) supaRenderCloudPred(pred, app, api);
 
   } catch(err) {
-    if (statusEl()) statusEl().textContent = "🤖 Không kết nối được AI KING DZI";
+    if (pb) pb.innerHTML = `<div class="pred-loading"><span>⚠️ Không kết nối được AI KING DZI</span></div>`;
   }
 }
 
@@ -541,21 +482,28 @@ function supaRenderCloudPred(pred, app, api) {
   const barFilled = Math.round((pred.do_tin_cay || 0) / 10);
   const bar = "█".repeat(barFilled) + "░".repeat(10 - barFilled);
   const timeStr = new Date(pred.created_at).toLocaleTimeString("vi-VN");
+  const nextPhien = pred.phien ? (parseInt(pred.phien) + 1) : "?";
+  const appLabel = app && api ? app + "_" + api.label : "";
 
   pb.innerHTML = `
     <div class="supa-pred-block">
       <div class="robot-gif-wrap">
-        <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcW9oaXVsa2M3bGE4NThpNGcwdmRyazZmaGZwenJ4dzgzNHZkcGt2aSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l0HlBO7eyXzSZkJri/giphy.gif" class="robot-gif" alt="AI Robot"/>
+        <img src="https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" class="robot-gif" alt="AI Robot"
+          onerror="this.src='https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif'"/>
       </div>
+      <div class="ai-typing-wrap"><div class="ai-typing-text" id="ai-typing-text"></div></div>
       <div class="supa-pred-badge">🤖 AI KING DZI</div>
-      <div class="supa-pred-phien">Phiên #${pred.phien}</div>
+      <div class="pred-next-lbl">Dự đoán phiên sau là</div>
+      <div class="pred-next-num">#${nextPhien}</div>
       <div class="dice-anim-row"><span class="dice-spin">🎲</span><span class="dice-spin" style="animation-delay:.15s">🎲</span><span class="dice-spin" style="animation-delay:.3s">🎲</span></div>
       <div class="supa-pred-result">${emoji} <span>${pred.du_doan}</span></div>
       <div class="supa-pred-bar">[${bar}] ${pred.do_tin_cay}%</div>
       <div class="supa-pred-votes">🗳️ ${pred.votes}/${pred.total_methods} phương pháp</div>
       <div class="supa-pred-time">⏰ ${timeStr}</div>
-
+      <button class="open-hist-btn" onclick="openHistModal('${app}','${api ? api.label : ''}','${api ? api.type : ''}')">📋 Lịch Sử Dự Đoán</button>
     </div>`;
+  // Khởi động typing animation "đang suy nghĩ"
+  startAITyping("thinking");
 }
 
 // Subscribe realtime khi vào game — nhận data từ Python tool ngay lập tức
@@ -595,6 +543,16 @@ function processData(data, app, api) {
     else    window._statData[app][label].s++;
     verdict = { ok, pred: pp.pred, actual: actualKq };
     window._pendingPred[app][label] = null;
+    // Lưu vào predLog
+    const logKey = app + "_" + label;
+    if (!window._predLog) window._predLog = {};
+    if (!window._predLog[logKey]) window._predLog[logKey] = [];
+    if (!window._predLog[logKey].find(r => r.phien === pp.pendingPhien)) {
+      window._predLog[logKey].push({ phien: pp.pendingPhien || phien, pred: pp.pred, actual: actualKq, ok });
+      if (window._predLog[logKey].length > 100) window._predLog[logKey].shift();
+    }
+    // Typing animation theo kết quả
+    startAITyping(ok ? "correct" : "wrong");
   }
   if (window._lastPhien[app]?.[label] !== phien) {
     window._lastPhien[app][label] = phien;
@@ -688,7 +646,9 @@ function renderPred(app, api, verdict) {
   const { best, conf, votes, total, topM, topAcc } = ensemblePredict(results, lb);
   if (!best) { pb.innerHTML = `${verdictHtml}<div class="pred-loading">Không đủ dữ liệu</div>`; return; }
 
-  window._pendingPred[app][api.label] = { pred: best };
+  const curPhien = hist.length > 0 ? hist[hist.length - 1].phien : "?";
+  const nextPhien = curPhien !== "?" ? (parseInt(curPhien) + 1) : "?";
+  window._pendingPred[app][api.label] = { pred: best, pendingPhien: curPhien };
   const cl          = RCL[best] || "";
   const acc         = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "N/A";
   const streakLb    = results.length > 0 ? results[results.length - 1] : "?";
@@ -704,14 +664,17 @@ function renderPred(app, api, verdict) {
     ${verdictHtml}
     <div class="pred-result">
       <div class="robot-gif-wrap">
-        <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcW9oaXVsa2M3bGE4NThpNGcwdmRyazZmaGZwenJ4dzgzNHZkcGt2aSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l0HlBO7eyXzSZkJri/giphy.gif" class="robot-gif" alt="AI Robot"/>
+        <img src="https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" class="robot-gif" alt="AI Robot"
+          onerror="this.src='https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif'"/>
       </div>
+      <div class="ai-typing-wrap"><div class="ai-typing-text" id="ai-typing-text"></div></div>
+      <div class="pred-next-lbl">Dự đoán phiên sau là</div>
+      <div class="pred-next-num">#${nextPhien}</div>
       <div class="dice-anim-row">
         <span class="dice-spin">🎲</span><span class="dice-spin" style="animation-delay:.15s">🎲</span><span class="dice-spin" style="animation-delay:.3s">🎲</span>
       </div>
       <div class="pred-emoji-big spin-on-change">${RE[best] || "?"}</div>
       <div class="pred-label ${cl}">${best}</div>
-      <div class="pred-sub-label">${phienLabel}</div>
     </div>
     <div class="conf-bar-wrap">
       <div class="conf-bar-bg">
@@ -743,7 +706,10 @@ function renderPred(app, api, verdict) {
     <div class="streak-pill">🔁 Streak: <strong>${streak}</strong> phiên ${RE[streakLb] || ""} <em>${streakLb}</em></div>
     <div class="top-method-row">🏅 Leader: <strong>${topLabel}</strong> <span>${topAcc}%</span></div>
     <div class="ai-reason-block">${aiReason}</div>
-    <div class="algo-badge">🧠 ${total} thuật toán · Ensemble AI · Backtest Weighted</div>`;
+    <div class="algo-badge">🧠 ${total} thuật toán · Ensemble AI · Backtest Weighted</div>
+    <button class="open-hist-btn" onclick="openHistModal('${app}','${api.label}','${api.type}')">📋 Lịch Sử Dự Đoán</button>`;
+  // Typing animation: đang suy nghĩ (trừ khi vừa có verdict thì đã set rồi)
+  if (!verdict) startAITyping("thinking");
 }
 
 // ─── AI REASONING (port từ Discord bot) ──────────────────────
@@ -813,4 +779,117 @@ function showCalcEffect() {
     overlay.appendChild(span);
   });
   setTimeout(() => overlay.classList.add("hidden"), 1800);
+}
+
+// ── AI TYPING ANIMATION ─────────────────────────────────────
+window._typingTimer = null;
+const AI_MESSAGES = {
+  thinking: [
+    "🤖 Bot AI King Dzi đang suy nghĩ...",
+    "🧠 Bot AI King Dzi đang phân tích kết quả phiên sau...",
+    "⚙️ Bot AI King Dzi đang tính toán xác suất...",
+    "🔍 Bot AI King Dzi đang tìm pattern...",
+    "📊 Bot AI King Dzi đang xử lý 42 thuật toán...",
+  ],
+  result: [
+    "📢 Bot AI King Dzi báo kết quả phiên sau là...",
+    "🎯 Bot AI King Dzi đã phân tích xong!",
+    "🤖 Bot AI King Dzi dự đoán chính xác phiên sau:",
+  ],
+  correct: [
+    "🎉 Bot AI King Dzi đã dự đoán chính xác! Quá tuyệt vời!",
+    "✅ Bot AI King Dzi đúng rồi! Xuất sắc!",
+    "🏆 Bot AI King Dzi thắng! Bạn theo dõi chưa?",
+  ],
+  wrong: [
+    "🥲🥲 Bot AI King Dzi đã trả lời sai rồi... Mình xin lỗi nhé",
+    "😔 Bot AI King Dzi đoán sai lần này... Cố lên!",
+    "🙏 Bot AI King Dzi xin lỗi bạn nhé, lần sau sẽ cố hơn!",
+  ],
+};
+
+function startAITyping(state) {
+  if (window._typingTimer) clearTimeout(window._typingTimer);
+  const el = document.getElementById("ai-typing-text");
+  if (!el) return;
+  const msgs = AI_MESSAGES[state] || AI_MESSAGES.thinking;
+  const msg = msgs[Math.floor(Math.random() * msgs.length)];
+  el.className = "ai-typing-text " + state;
+  let i = 0;
+  el.textContent = "";
+  const cursor = document.createElement("span");
+  cursor.className = "ai-typing-cursor";
+  el.appendChild(cursor);
+
+  function typeNext() {
+    if (i < msg.length) {
+      el.insertBefore(document.createTextNode(msg[i]), cursor);
+      i++;
+      window._typingTimer = setTimeout(typeNext, 28);
+    } else {
+      // Sau khi gõ xong, nếu là thinking thì loop sang msg khác sau 4s
+      if (state === "thinking") {
+        window._typingTimer = setTimeout(() => startAITyping("thinking"), 4000);
+      } else if (state === "result") {
+        window._typingTimer = setTimeout(() => startAITyping("thinking"), 5000);
+      }
+      // correct/wrong: dừng lại, không loop
+    }
+  }
+  typeNext();
+}
+
+// ── HIST MODAL ──────────────────────────────────────────────
+function openHistModal(app, label, type) {
+  const isXD = type === "xocdia";
+  const hist = window._histData[app]?.[label] || [];
+  const st   = window._statData[app]?.[label] || { d: 0, s: 0 };
+  const logKey = app + "_" + label;
+  const log = (window._predLog && window._predLog[logKey]) || [];
+  const acc = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) : 0;
+  const accColor = acc >= 60 ? "var(--green)" : acc >= 50 ? "var(--gold)" : "var(--tai)";
+
+  document.getElementById("hist-modal-title").textContent = `📋 ${app.toUpperCase()} · ${label}`;
+  document.getElementById("hist-modal-stats").innerHTML = `
+    <div class="hms-item"><div class="hms-val" style="color:var(--accent)">${hist.length}</div><div class="hms-lbl">Phiên</div></div>
+    <div class="hms-item"><div class="hms-val" style="color:var(--green)">${st.d}</div><div class="hms-lbl">✅ Đúng</div></div>
+    <div class="hms-item"><div class="hms-val" style="color:var(--tai)">${st.s}</div><div class="hms-lbl">❌ Sai</div></div>
+    <div class="hms-item"><div class="hms-val" style="color:${accColor}">${acc}%</div><div class="hms-lbl">Chính xác</div></div>`;
+
+  // Build log map
+  const logMap = {};
+  log.forEach(r => logMap[r.phien] = r);
+
+  const tbody = document.getElementById("hist-tbl-body");
+  tbody.innerHTML = "";
+  const recent = [...hist].reverse().slice(0, 60);
+  if (!recent.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:22px">Chưa có dữ liệu</td></tr>`;
+  } else {
+    recent.forEach(rec => {
+      const kq = (isXD ? rec.ket_qua_truyen_thong : rec.ket_qua) || "?";
+      const kqCls = "ht-" + (RCL[kq] || "");
+      const logRec = logMap[rec.phien];
+      let predHtml = `<span class="ht-pending">—</span>`;
+      let resHtml  = `<span class="ht-pending">—</span>`;
+      if (logRec) {
+        predHtml = `<span class="ht-pred ${RCL[logRec.pred] || ''}">${RE[logRec.pred] || ""} ${logRec.pred}</span>`;
+        resHtml  = logRec.ok
+          ? `<span class="ht-dung">✅ Đúng</span>`
+          : `<span class="ht-sai">❌ Sai</span>`;
+      }
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><span class="ht-phien">#${rec.phien}</span></td>
+        <td><span class="${kqCls}">${RE[kq] || ""} ${kq}</span></td>
+        <td>${predHtml}</td>
+        <td>${resHtml}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+  document.getElementById("hist-modal-overlay").classList.remove("hidden");
+}
+
+function closeHistModal() {
+  document.getElementById("hist-modal-overlay").classList.add("hidden");
 }
