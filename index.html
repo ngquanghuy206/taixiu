@@ -48,8 +48,13 @@
     <button class="auth-btn" id="login-btn" onclick="doLogin()">ĐĂNG NHẬP</button>
     <div class="auth-err" id="auth-err"></div>
     <div class="auth-contact-notice">
-      <span class="auth-notice-icon">💡</span>
-      Chưa có tài khoản? Vui lòng liên hệ <strong>Admin</strong> để mua hoặc thuê
+      <div class="auth-notice-title">💡 Chưa có tài khoản? Liên hệ Admin</div>
+      <div class="auth-contact-btns">
+        <a href="https://zalo.me/0993389813" target="_blank" class="auth-sup-btn auth-zalo">💬 Zalo</a>
+        <a href="https://discord.gg/cq2MD24GK" target="_blank" class="auth-sup-btn auth-discord">🎮 Discord</a>
+        <a href="https://t.me/knamknam06" target="_blank" class="auth-sup-btn auth-tele">✈️ Telegram</a>
+        <a href="https://www.facebook.com/share/1AtHiLreS1/" target="_blank" class="auth-sup-btn auth-fb">📘 Facebook</a>
+      </div>
     </div>
     <div class="auth-copy">© Bản quyền thuộc về Nguyễn Quang Huy Dzi</div>
   </div>
@@ -115,19 +120,25 @@
           <!-- Blocker nếu web không cho nhúng -->
           <div class="iframe-blocker hidden" id="iframe-blocker">
             <div class="iframe-msg">
-              <span class="iframe-msg-icon">🌐</span>
-              <div class="iframe-msg-title">Không thể nhúng trang này</div>
-              <div class="iframe-msg-sub">Trang web sảnh bật <strong>X-Frame-Options</strong> — không cho phép nhúng vào iframe.</div>
-              <button class="open-tab-btn" id="open-tab-btn" onclick="openLobbyTab()">
-                <span>🚀</span> Mở Sảnh Trong Tab Mới
-              </button>
-              <div class="two-window-guide">
-                <div class="two-window-title">💡 Dùng 2 cửa sổ — dễ dùng nhất</div>
-                <div class="two-window-steps">
-                  <div class="tw-step"><span class="tw-num">1</span><span>Nhấn nút trên → sảnh mở ra <strong>tab / cửa sổ mới</strong></span></div>
-                  <div class="tw-step"><span class="tw-num">2</span><span>Kéo tab sảnh ra thành <strong>cửa sổ riêng</strong> (drag ra ngoài thanh tab)</span></div>
-                  <div class="tw-step"><span class="tw-num">3</span><span>Đặt <strong>Tool AI</strong> ở trái · <strong>Sảnh game</strong> ở phải — nhìn cùng lúc</span></div>
+              <div class="popup-hero">🎮</div>
+              <div class="iframe-msg-title">Mở Sảnh Dạng Cửa Sổ Nổi</div>
+              <div class="iframe-msg-sub">Sảnh này không cho nhúng trực tiếp.<br/>Chọn cách mở bên dưới để chơi và xem AI cùng lúc.</div>
+
+              <button class="popup-main-btn" onclick="openLobbyPopup()">
+                <span class="popup-btn-icon">🪟</span>
+                <div>
+                  <div class="popup-btn-title">Mở Cửa Sổ Nổi</div>
+                  <div class="popup-btn-sub">Cửa sổ nhỏ nổi bên cạnh — xem AI cùng lúc</div>
                 </div>
+              </button>
+
+              <button class="popup-alt-btn" onclick="openLobbyTab()">
+                <span>🚀</span> Mở Tab Mới
+              </button>
+
+              <div class="popup-tip">
+                <span class="popup-tip-icon">💡</span>
+                <span>Sau khi mở cửa sổ nổi, quay lại Tool AI để xem dự đoán — sảnh vẫn chạy nền</span>
               </div>
               <div class="iframe-msg-url" id="iframe-msg-url"></div>
             </div>
@@ -136,6 +147,11 @@
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation"
             referrerpolicy="no-referrer" allowfullscreen></iframe>
         </div>
+
+        <!-- FLOATING LOBBY BUTTON -->
+        <button class="lobby-float-btn hidden" id="lobby-float-btn" onclick="refocusPopup()">
+          🎮 Sảnh Game
+        </button>
 
         <!-- CALC ANIMATION OVERLAY -->
         <div id="calc-overlay" class="hidden"></div>
