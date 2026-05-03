@@ -9,7 +9,7 @@ function saveUsers(u) { localStorage.setItem("tx_users", JSON.stringify(u)); }
 // Lấy IP thực của người dùng (async)
 async function getClientIP() {
   try {
-    const r = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(4000) });
+    const r = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(2500) });
     const d = await r.json();
     return d.ip || "unknown";
   } catch {
@@ -76,10 +76,11 @@ async function doLogin() {
 
   // Admin bypass
   if (u === ADMIN_USER && p === ADMIN_PASS) {
-    window._curUser    = u;
-    window._isAdmin    = true;
-    window._clientIP   = await getClientIP();
-    window._expireAt   = null;
+    window._curUser  = u;
+    window._isAdmin  = true;
+    window._expireAt = null;
+    // Không await getClientIP (có thể chậm) — lấy sau
+    getClientIP().then(ip => { window._clientIP = ip; }).catch(() => {});
     await animateLogin();
     launchApp();
     return;

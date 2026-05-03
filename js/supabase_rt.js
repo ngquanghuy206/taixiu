@@ -19,10 +19,15 @@ let _onNewPred    = null; // callback khi có dự đoán mới
 async function supaLoadSDK() {
   if (window.supabase) return true;
   return new Promise(resolve => {
+    // Timeout 6s — không block app nếu CDN chậm
+    const timeout = setTimeout(() => {
+      console.warn("[Supa] SDK load timeout — chạy không có realtime");
+      resolve(false);
+    }, 6000);
     const s = document.createElement("script");
     s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js";
-    s.onload = () => resolve(true);
-    s.onerror = () => resolve(false);
+    s.onload = () => { clearTimeout(timeout); resolve(true); };
+    s.onerror = () => { clearTimeout(timeout); resolve(false); };
     document.head.appendChild(s);
   });
 }
