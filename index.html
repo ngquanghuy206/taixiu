@@ -47,6 +47,10 @@
     <input id="inp-pass" class="auth-field" type="password" placeholder="Mật khẩu"/>
     <button class="auth-btn" id="login-btn" onclick="doLogin()">ĐĂNG NHẬP</button>
     <div class="auth-err" id="auth-err"></div>
+    <div class="auth-contact-notice">
+      <span class="auth-notice-icon">💡</span>
+      Chưa có tài khoản? Vui lòng liên hệ <strong>Admin</strong> để mua hoặc thuê
+    </div>
     <div class="auth-copy">© Bản quyền thuộc về Nguyễn Quang Huy Dzi</div>
   </div>
 </div>
@@ -180,7 +184,7 @@
               <tr>
                 <th>Tài Khoản</th>
                 <th>Trạng Thái</th>
-                <th>Còn lại</th>
+                <th>⏱ Thời Gian Còn Lại</th>
                 <th>IP Thiết Bị</th>
                 <th>Thao Tác</th>
               </tr>
@@ -188,6 +192,14 @@
             <tbody id="user-list"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- LOBBY MANAGER PAGE -->
+      <div id="page-lobby-mgr" style="display:none">
+        <div class="admin-head">
+          <div class="admin-title">🏗️ Quản Lý Sảnh</div>
+        </div>
+        <div class="lobby-mgr-grid" id="lobby-mgr-grid"></div>
       </div>
 
     </div><!-- /content -->
@@ -205,6 +217,9 @@
         <div class="nav-item" id="nav-admin" style="display:none" onclick="showAdmin()">
           <span class="nav-icon">👑</span>Quản Lý TK
         </div>
+        <div class="nav-item" id="nav-lobby-mgr" style="display:none" onclick="showLobbyManager()">
+          <span class="nav-icon">🏗️</span>Quản Lý Sảnh
+        </div>
         <div class="nav-item nav-logout" onclick="doLogout()">
           <span class="nav-icon">🚪</span>Đăng Xuất
         </div>
@@ -212,11 +227,16 @@
       <div class="sidebar-support">
         <div class="support-title">Hỗ Trợ</div>
         <div class="support-btns">
-          <a href="#" class="sup-btn zalo">💬 Zalo</a>
-          <a href="#" class="sup-btn discord">🎮 Discord</a>
-          <a href="#" class="sup-btn tele">✈️ Telegram</a>
-          <a href="#" class="sup-btn fb">📘 Facebook</a>
+          <a href="https://zalo.me/0993389813" target="_blank" class="sup-btn zalo">💬 Zalo</a>
+          <a href="https://discord.gg/cq2MD24GK" target="_blank" class="sup-btn discord">🎮 Discord</a>
+          <a href="https://t.me/knamknam06" target="_blank" class="sup-btn tele">✈️ Telegram</a>
+          <a href="https://www.facebook.com/share/1AtHiLreS1/" target="_blank" class="sup-btn fb">📘 Facebook</a>
         </div>
+      </div>
+      <!-- THỜI GIAN SỬ DỤNG CÒN LẠI (chỉ user khách) -->
+      <div class="sidebar-expire" id="sidebar-expire" style="display:none">
+        <div class="expire-label">⏱ Thời gian còn lại</div>
+        <div class="expire-countdown" id="user-countdown">--:--:--</div>
       </div>
       <div class="sidebar-bottom">
         <div class="sidebar-copy">© Bản quyền thuộc về<br/><strong>Nguyễn Quang Huy Dzi</strong><br/>🧠 42 Thuật Toán AI</div>
@@ -245,6 +265,34 @@
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeModal()">Huỷ</button>
       <button class="modal-submit" onclick="submitUser()">XÁC NHẬN</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GIA HẠN -->
+<div class="modal-overlay hidden" id="renew-overlay" onclick="if(event.target===this)closeRenewModal()">
+  <div class="modal">
+    <div class="modal-title renew-modal-title" id="renew-title">GIA HẠN TÀI KHOẢN</div>
+    <div class="renew-badge">🔁 Gia hạn từ thời điểm hiện tại</div>
+    <div class="modal-field">
+      <label class="modal-label">Số ngày gia hạn</label>
+      <input id="renew-days" class="modal-input" type="number" placeholder="30" min="1"/>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeRenewModal()">Huỷ</button>
+      <button class="modal-submit renew-submit-btn" onclick="submitRenew()">✅ GIA HẠN</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL BẢO TRÌ -->
+<div class="modal-overlay hidden" id="maint-overlay" onclick="if(event.target===this)closeMaintModal()">
+  <div class="modal">
+    <div class="modal-title" id="maint-modal-title">XÁC NHẬN BẢO TRÌ</div>
+    <div style="text-align:center;padding:12px 0 18px;color:#aaa;font-size:14px;line-height:1.6" id="maint-modal-body"></div>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeMaintModal()">Huỷ</button>
+      <button class="modal-submit" id="maint-confirm-btn" onclick="confirmMaintAction()">XÁC NHẬN</button>
     </div>
   </div>
 </div>
