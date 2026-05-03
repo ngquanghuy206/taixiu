@@ -36,33 +36,44 @@ function startTopbarCountdown(expireAt) {
 
 // ── LAUNCH APP ─────────────────────────────────────────────
 function launchApp() {
-  document.getElementById("auth-screen").style.display = "none";
-  const app = document.getElementById("app");
-  app.style.display = "flex";
-  app.style.flexDirection = "column";
-  document.getElementById("nav-admin").style.display = window._isAdmin ? "flex" : "none";
-  document.getElementById("nav-lobby-mgr").style.display = window._isAdmin ? "flex" : "none";
-  // Hiện countdown chỉ cho user khách
-  const expireBox = document.getElementById("sidebar-expire");
-  if (expireBox) expireBox.style.display = window._isAdmin ? "none" : "block";
-  // Hiển thị thông tin tài khoản đầy đủ
-  const userDisplayEl = document.getElementById("user-display");
-  if (userDisplayEl) {
-    const roleLabel = window._isAdmin ? "👑 ADMIN" : "🔑 Người dùng";
-    userDisplayEl.innerHTML = `<span class="user-name-tag">${window._curUser}</span><span class="user-role-tag">${roleLabel}</span>`;
+  try {
+    document.getElementById("auth-screen").style.display = "none";
+    const app = document.getElementById("app");
+    app.style.display = "flex";
+    app.style.flexDirection = "column";
+
+    const navAdmin   = document.getElementById("nav-admin");
+    const navLobby   = document.getElementById("nav-lobby-mgr");
+    if (navAdmin)  navAdmin.style.display  = window._isAdmin ? "flex" : "none";
+    if (navLobby)  navLobby.style.display  = window._isAdmin ? "flex" : "none";
+
+    const expireBox = document.getElementById("sidebar-expire");
+    if (expireBox) expireBox.style.display = window._isAdmin ? "none" : "block";
+
+    // Thông tin tài khoản topbar
+    const userDisplayEl = document.getElementById("user-display");
+    if (userDisplayEl) {
+      const roleLabel = window._isAdmin ? "👑 ADMIN" : "🔑 Người dùng";
+      userDisplayEl.innerHTML = `<span class="user-name-tag">${window._curUser || ""}</span><span class="user-role-tag">${roleLabel}</span>`;
+    }
+
+    // Thời gian sử dụng
+    const tbExpire = document.getElementById("topbar-expire");
+    if (tbExpire) {
+      tbExpire.style.display = "block";
+      if (window._isAdmin) {
+        tbExpire.textContent = "♾️ Vĩnh viễn";
+        tbExpire.style.color = "#ffd700";
+      } else if (window._expireAt) {
+        startTopbarCountdown(window._expireAt);
+      }
+    }
+
+    buildLobbies();
+    showHome();
+  } catch(err) {
+    console.error("[launchApp] Lỗi:", err);
   }
-  // Hiển thị thời gian sử dụng trong topbar
-  const tbExpire = document.getElementById("topbar-expire");
-  if (!window._isAdmin && window._expireAt && tbExpire) {
-    tbExpire.style.display = "block";
-    startTopbarCountdown(window._expireAt);
-  } else if (window._isAdmin && tbExpire) {
-    tbExpire.style.display = "block";
-    tbExpire.textContent = "♾️ Vĩnh viễn";
-    tbExpire.style.color = "#ffd700";
-  }
-  buildLobbies();
-  showHome();
 }
 
 // ── SIDEBAR ────────────────────────────────────────────────
@@ -196,6 +207,7 @@ function goHome() { showHome(); }
 // ── LOBBIES ────────────────────────────────────────────────
 function buildLobbies() {
   const g = document.getElementById("lobby-grid");
+  if (!g) return;
   g.innerHTML = "";
   const maint = getMaintenance();
   Object.entries(APIS).forEach(([app, apis]) => {

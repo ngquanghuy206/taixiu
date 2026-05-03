@@ -110,6 +110,8 @@ async function doLogin() {
   window._isAdmin  = false;
   window._clientIP = ip;
   window._userExpires = acc.expires;
+  // Phải set _expireAt TRƯỚC launchApp() để topbar countdown hoạt động
+  window._expireAt = new Date(acc.expires).getTime();
   await animateLogin();
   launchApp();
   startExpireCountdown(acc.expires);
@@ -141,12 +143,18 @@ function doLogout(expired = false) {
   if (iframe) iframe.src = "about:blank";
   window._curUser = null;
   window._isAdmin = false;
+  window._expireAt = null;
   document.getElementById("app").style.display = "none";
   document.getElementById("auth-screen").style.display = "flex";
   document.getElementById("inp-user").value = "";
   document.getElementById("inp-pass").value = "";
   document.getElementById("login-btn").disabled = false;
   document.getElementById("login-btn").innerHTML = "ĐĂNG NHẬP";
+  // Reset topbar
+  const ud = document.getElementById("user-display");
+  if (ud) ud.innerHTML = "";
+  const te = document.getElementById("topbar-expire");
+  if (te) { te.style.display = "none"; te.textContent = ""; }
   if (expired) {
     showAuthErr("⏰ Tài khoản đã hết hạn sử dụng.\nVui lòng liên hệ admin để gia hạn.");
   } else {
