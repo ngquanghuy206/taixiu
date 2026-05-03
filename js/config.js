@@ -37,13 +37,13 @@ function getMaintenance() { return JSON.parse(localStorage.getItem("tx_maintenan
 function saveMaintenance(m) { localStorage.setItem("tx_maintenance", JSON.stringify(m)); }
 function isUnderMaintenance(app) { return !!getMaintenance()[app]; }
 
-// Logo ảnh thật từ imgur
+// Logo ảnh thật từ thư mục img/
 const BRAND_IMG = {
-  sunwin:   "https://i.imgur.com/zLTIJFJ.png",
-  xocdia88: "https://i.imgur.com/RrjpISS.png",
-  hitclub:  "https://i.imgur.com/Q3NRQHQ.png",
-  lc79:     "https://i.imgur.com/ZYr1IEi.png",
-  betvip:   "https://i.imgur.com/TFt0SmI.png",
+  sunwin:   "img/sunwin.jpg",
+  xocdia88: "img/xocdia88.jpg",
+  hitclub:  "img/hitclub.jpg",
+  lc79:     "img/lc79.jpg",
+  betvip:   "img/betvip.jpg",
 };
 const BRAND_EMOJI = { sunwin:"☀️", xocdia88:"🎯", hitclub:"🎪", lc79:"🎲", betvip:"💎" };
 const BRAND_COLOR = { sunwin:"#FFD700", xocdia88:"#FF4500", hitclub:"#00CED1", lc79:"#7B68EE", betvip:"#FF69B4" };

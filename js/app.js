@@ -222,7 +222,10 @@ function buildLobbies() {
     const isMaint = !!maint[app];
     const c       = document.createElement("div");
     c.className   = "lobby-card" + (isMaint ? " lobby-maint" : "");
+    c.dataset.app = app;
     const imgUrl = (typeof BRAND_IMG !== "undefined" && BRAND_IMG[app]) ? BRAND_IMG[app] : "";
+    // Tính % chính xác từ statData
+    const accHtml = getLobbyAccBadgeHtml(app);
     c.innerHTML = `
       <div class="lobby-banner" style="background:${grad}">
         <div class="lobby-banner-inner">
@@ -233,6 +236,7 @@ function buildLobbies() {
         <div class="lobby-particles">
           <span></span><span></span><span></span>
         </div>
+        <div class="lobby-acc-badge" id="acc-badge-${app}">${accHtml}</div>
       </div>
       <div class="lobby-info">
         <div class="lobby-name">${app.toUpperCase()}</div>
@@ -240,9 +244,28 @@ function buildLobbies() {
       </div>`;
     c.onclick = () => isMaint ? showToast("🔧 Chức năng này đang được bảo trì!", "warn") : openGame(app);
     g.appendChild(c);
-    // animate in
     setTimeout(() => c.classList.add("visible"), 50 * Object.keys(APIS).indexOf(app));
   });
+}
+
+function getLobbyAccBadgeHtml(app) {
+  const apis = APIS[app] || [];
+  let totalD = 0, totalS = 0;
+  apis.forEach(a => {
+    const st = window._statData?.[app]?.[a.label] || { d: 0, s: 0 };
+    totalD += st.d; totalS += st.s;
+  });
+  const total = totalD + totalS;
+  if (total === 0) return "";
+  const acc = Math.round(totalD / total * 100);
+  const color = acc >= 60 ? "#22c55e" : acc >= 50 ? "#ffd700" : "#ef4444";
+  return `<span style="color:${color};font-weight:900;font-family:'Orbitron',monospace;font-size:11px">${acc}%</span>`;
+}
+
+function updateLobbyAccBadge(app) {
+  const el = document.getElementById("acc-badge-" + app);
+  if (!el) return;
+  el.innerHTML = getLobbyAccBadgeHtml(app);
 }
 
 // ── GAME ───────────────────────────────────────────────────
@@ -512,6 +535,8 @@ async function supaStartGameRealtime(app, api) {
     // Có phiên mới từ Python → cập nhật history và render
     if (window._lastPhien[app]?.[api.label] === row.phien) return;
     window._lastPhien[app][api.label] = row.phien;
+    const isXD = api.type === "xocdia";
+    const actualKq = isXD ? row.ket_qua_truyen_thong : row.ket_qua;
     const rec = {
       phien: row.phien, ket_qua: row.ket_qua, tong: row.tong,
       xuc_xac_1: row.xuc_xac_1, xuc_xac_2: row.xuc_xac_2, xuc_xac_3: row.xuc_xac_3,
@@ -521,12 +546,42 @@ async function supaStartGameRealtime(app, api) {
     if (!window._histData[app]?.[api.label]) return;
     window._histData[app][api.label].push(rec);
     if (window._histData[app][api.label].length > 80) window._histData[app][api.label].shift();
+
+    // So sánh dự đoán đang pending vs kết quả vừa về
+    const pp = window._pendingPred[app]?.[api.label];
+    if (pp && actualKq) {
+      const ok = pp.pred === actualKq;
+      if (!window._statData[app]) window._statData[app] = {};
+      if (!window._statData[app][api.label]) window._statData[app][api.label] = { d: 0, s: 0 };
+      if (ok) window._statData[app][api.label].d++;
+      else    window._statData[app][api.label].s++;
+      // Ghi predLog
+      const logKey = app + "_" + api.label;
+      if (!window._predLog) window._predLog = {};
+      if (!window._predLog[logKey]) window._predLog[logKey] = [];
+      const pendingPhien = pp.pendingPhien || row.phien;
+      if (!window._predLog[logKey].find(r => r.phien === pendingPhien)) {
+        window._predLog[logKey].push({ phien: pendingPhien, pred: pp.pred, actual: actualKq, ok });
+        if (window._predLog[logKey].length > 100) window._predLog[logKey].shift();
+      }
+      window._pendingPred[app][api.label] = null;
+      // Typing animation
+      startAITyping(ok ? "correct" : "wrong");
+      // Cập nhật % trên lobby card
+      updateLobbyAccBadge(app);
+    }
+
     renderHistBar(app, api);
-    showToast(`🤖 AI KING DZI — Phiên mới: #${row.phien} — ${row.ket_qua || row.ket_qua_truyen_thong || ""}`, "info");
+    showToast(`🤖 AI KING DZI — Phiên mới: #${row.phien} — ${actualKq || ""}`, "info");
   });
 
   await supaSubscribePredictions(app, api.label, row => {
-    // Có dự đoán mới từ Python
+    // Có dự đoán mới từ Python → lưu pending và render
+    if (!window._pendingPred[app]) window._pendingPred[app] = {};
+    // Lấy phiên hiện tại để track
+    const hist = window._histData[app]?.[api.label] || [];
+    const curPhien = hist.length > 0 ? hist[hist.length - 1].phien : row.phien;
+    window._pendingPred[app][api.label] = { pred: row.du_doan, pendingPhien: curPhien };
     supaRenderCloudPred(row, app, api);
   });
 }
