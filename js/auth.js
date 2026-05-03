@@ -118,65 +118,89 @@ async function doLogin() {
   btn.disabled = true;
   btn.innerHTML = `<span class="btn-spin"></span> Đang xác thực...`;
 
-  // Admin bypass
-  if (u === ADMIN_USER && p === ADMIN_PASS) {
-    window._curUser  = u;
-    window._isAdmin  = true;
-    window._expireAt = null;
-    getClientIP().then(ip => { window._clientIP = ip; }).catch(() => {});
+  // Luôn reset nút nếu có lỗi bất kỳ
+  try {
+    // Admin bypass
+    if (u === ADMIN_USER && p === ADMIN_PASS) {
+      window._curUser  = u;
+      window._isAdmin  = true;
+      window._expireAt = null;
+      getClientIP().then(ip => { window._clientIP = ip; }).catch(() => {});
+      await animateLogin();
+      btn.disabled = false;
+      btn.innerHTML = "ĐĂNG NHẬP";
+      try { launchApp(); } catch(err) {
+        showAuthErr("⚠️ Lỗi khởi động app. Vui lòng thử lại!");
+      }
+      return;
+    }
+
+    // Lấy danh sách user từ Supabase (timeout 8s)
+    let users = [];
+    try {
+      const ctrl = new AbortController();
+      const tid  = setTimeout(() => ctrl.abort(), 8000);
+      const r = await fetch(`${SUPA_URL}/rest/v1/tx_users?select=*`, {
+        headers: _SH(), signal: ctrl.signal
+      });
+      clearTimeout(tid);
+      if (r.ok) users = await r.json();
+      else { showAuthErr("⚠️ Không kết nối được server. Thử lại!"); btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return; }
+    } catch(e) {
+      showAuthErr("⚠️ Mất kết nối server. Kiểm tra mạng rồi thử lại!");
+      btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
+    }
+
+    const acc = users.find(x => x.username === u && x.password === p);
+
+    if (!acc) {
+      showAuthErr("Tài khoản hoặc mật khẩu không đúng ❌");
+      btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
+    }
+    if (new Date(acc.expires) < new Date()) {
+      showAuthErr("Tài khoản đã hết hạn sử dụng ⏰\nVui lòng liên hệ admin để gia hạn.");
+      btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
+    }
+
+    // Device check
+    const ip     = await getClientIP();
+    const maxDev = acc.max_devices || 1;
+    let devList  = await getDeviceList(u);
+    if (!devList.includes(ip)) {
+      if (devList.length >= maxDev) {
+        showAuthErr(`⚠️ Tài khoản chỉ dùng được trên ${maxDev} thiết bị!\nLiên hệ admin để được hỗ trợ.`);
+        btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
+      }
+      devList.push(ip);
+      await saveDeviceList(u, devList);
+    }
+
+    window._curUser     = u;
+    window._isAdmin     = false;
+    window._clientIP    = ip;
+    window._userExpires = acc.expires;
+    window._expireAt    = new Date(acc.expires).getTime();
     await animateLogin();
     btn.disabled = false;
     btn.innerHTML = "ĐĂNG NHẬP";
-    try { launchApp(); } catch(err) {
+    try {
+      launchApp();
+      startExpireCountdown(acc.expires);
+      const usedDev = devList.length;
+      setTimeout(() => {
+        showToast(`📱 Tài khoản dùng được tối đa ${maxDev} thiết bị · Đang dùng: ${usedDev}/${maxDev}`, "ok");
+      }, 800);
+    } catch(err) {
+      console.error("[doLogin] launchApp lỗi:", err);
       showAuthErr("⚠️ Lỗi khởi động app. Vui lòng thử lại!");
     }
-    return;
-  }
 
-  // Lấy danh sách user từ Supabase
-  const users = await getUsers();
-  const acc   = users.find(x => x.username === u && x.password === p);
-
-  if (!acc) {
-    showAuthErr("Tài khoản hoặc mật khẩu không đúng ❌");
-    btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
-  }
-  if (new Date(acc.expires) < new Date()) {
-    showAuthErr("Tài khoản đã hết hạn sử dụng ⏰\nVui lòng liên hệ admin để gia hạn.");
-    btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
-  }
-
-  // Device check
-  const ip      = await getClientIP();
-  const maxDev  = acc.max_devices || 1;
-  let devList   = await getDeviceList(u);
-  if (!devList.includes(ip)) {
-    if (devList.length >= maxDev) {
-      showAuthErr(`⚠️ Tài khoản chỉ dùng được trên ${maxDev} thiết bị!\nLiên hệ admin để được hỗ trợ.`);
-      btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
-    }
-    devList.push(ip);
-    await saveDeviceList(u, devList);
-  }
-
-  window._curUser     = u;
-  window._isAdmin     = false;
-  window._clientIP    = ip;
-  window._userExpires = acc.expires;
-  window._expireAt    = new Date(acc.expires).getTime();
-  await animateLogin();
-  btn.disabled = false;
-  btn.innerHTML = "ĐĂNG NHẬP";
-  try {
-    launchApp();
-    startExpireCountdown(acc.expires);
-    const usedDev = devList.length;
-    setTimeout(() => {
-      showToast(`📱 Tài khoản dùng được tối đa ${maxDev} thiết bị · Đang dùng: ${usedDev}/${maxDev}`, "ok");
-    }, 800);
   } catch(err) {
-    console.error("[doLogin] launchApp lỗi:", err);
-    showAuthErr("⚠️ Lỗi khởi động app. Vui lòng thử lại!");
+    // Catch all — đảm bảo nút luôn được reset
+    console.error("[doLogin] lỗi không xác định:", err);
+    showAuthErr("⚠️ Lỗi không xác định. Vui lòng thử lại!");
+    btn.disabled = false;
+    btn.innerHTML = "ĐĂNG NHẬP";
   }
 }
 
