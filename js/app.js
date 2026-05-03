@@ -12,6 +12,28 @@ window._curApiIdx   = 0;
 window._fetchTimer  = null;
 window._predOpen    = true;
 
+
+// ── TOPBAR COUNTDOWN (cho user thuê) ──────────────────────
+function startTopbarCountdown(expireAt) {
+  const update = () => {
+    const left = expireAt - Date.now();
+    const el = document.getElementById('topbar-expire');
+    if (!el) return;
+    if (left <= 0) { el.textContent = '⏰ Đã hết hạn'; el.style.color='#ef4444'; return; }
+    const totalSec = Math.floor(left / 1000);
+    const d = Math.floor(totalSec / 86400);
+    const h = Math.floor((totalSec % 86400) / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const hms = [h,m,s].map(v=>String(v).padStart(2,'0')).join(':');
+    el.textContent = (d > 0 ? d + 'ngày ' : '') + hms;
+    const warn = left < 3600000;
+    el.style.color = warn ? '#ff6b35' : '#22c55e';
+  };
+  update();
+  setInterval(update, 1000);
+}
+
 // ── LAUNCH APP ─────────────────────────────────────────────
 function launchApp() {
   document.getElementById("auth-screen").style.display = "none";
@@ -23,7 +45,22 @@ function launchApp() {
   // Hiện countdown chỉ cho user khách
   const expireBox = document.getElementById("sidebar-expire");
   if (expireBox) expireBox.style.display = window._isAdmin ? "none" : "block";
-  document.getElementById("user-display").textContent = window._curUser;
+  // Hiển thị thông tin tài khoản đầy đủ
+  const userDisplayEl = document.getElementById("user-display");
+  if (userDisplayEl) {
+    const roleLabel = window._isAdmin ? "👑 ADMIN" : "🔑 Người dùng";
+    userDisplayEl.innerHTML = `<span class="user-name-tag">${window._curUser}</span><span class="user-role-tag">${roleLabel}</span>`;
+  }
+  // Hiển thị thời gian sử dụng trong topbar
+  const tbExpire = document.getElementById("topbar-expire");
+  if (!window._isAdmin && window._expireAt && tbExpire) {
+    tbExpire.style.display = "block";
+    startTopbarCountdown(window._expireAt);
+  } else if (window._isAdmin && tbExpire) {
+    tbExpire.style.display = "block";
+    tbExpire.textContent = "♾️ Vĩnh viễn";
+    tbExpire.style.color = "#ffd700";
+  }
   buildLobbies();
   showHome();
 }
@@ -168,13 +205,13 @@ function buildLobbies() {
     const isMaint = !!maint[app];
     const c       = document.createElement("div");
     c.className   = "lobby-card" + (isMaint ? " lobby-maint" : "");
+    const imgUrl = (typeof BRAND_IMG !== "undefined" && BRAND_IMG[app]) ? BRAND_IMG[app] : "";
     c.innerHTML = `
       <div class="lobby-banner" style="background:${grad}">
         <div class="lobby-banner-inner">
-          <div class="lobby-emoji">${em}</div>
+          ${imgUrl ? `<img src="${imgUrl}" class="lobby-logo-img" onerror="this.style.display='none'"/>` : `<div class="lobby-emoji">${em}</div>`}
           <div class="lobby-glow-ring" style="border-color:${col}40"></div>
         </div>
-        <div class="lobby-badge">${apis.length} API</div>
         ${isMaint ? `<div class="lobby-maint-overlay"><span>🔧</span><span>BẢO TRÌ</span></div>` : ""}
         <div class="lobby-particles">
           <span></span><span></span><span></span>
@@ -182,7 +219,6 @@ function buildLobbies() {
       </div>
       <div class="lobby-info">
         <div class="lobby-name">${app.toUpperCase()}</div>
-        <div class="lobby-apis">${apis.map(a => a.label).join(" · ")}</div>
         <div class="lobby-enter" style="color:${isMaint ? "#ff6b35" : col}">${isMaint ? "🔧 Đang bảo trì" : "Vào sảnh →"}</div>
       </div>`;
     c.onclick = () => isMaint ? showToast("🔧 Chức năng này đang được bảo trì!", "warn") : openGame(app);
@@ -442,7 +478,7 @@ async function doFetch() {
           <a href="https://zalo.me/0993389813" target="_blank" class="ferr-btn ferr-zalo">💬 Zalo</a>
           <a href="https://t.me/knamknam06" target="_blank" class="ferr-btn ferr-tele">✈️ Telegram</a>
         </div>
-        <div id="supa-fallback-status" class="supa-fallback-notice">☁️ Đang tải dữ liệu từ cloud...</div>
+        <div id="supa-fallback-status" class="supa-fallback-notice">☁️ Lấy dữ liệu từ AI KING DZI</div>
       </div>`;
   }
 }
@@ -453,7 +489,7 @@ async function supaLoadFallback(app, api) {
   try {
     const hist = await supaFetchHistory(app, api.label);
     if (!hist || !hist.history_json || hist.history_json.length === 0) {
-      if (statusEl()) statusEl().textContent = "☁️ Chưa có dữ liệu cloud cho sảnh này";
+      if (statusEl()) statusEl().textContent = "🤖 AI KING DZI chưa có dữ liệu cho sảnh này";
       return;
     }
     // Restore history vào state
@@ -465,7 +501,7 @@ async function supaLoadFallback(app, api) {
     if (latestRec) {
       window._lastPhien[app][api.label] = latestRec.phien;
     }
-    if (statusEl()) statusEl().textContent = `☁️ Đã tải ${hist.history_json.length} phiên từ cloud — cập nhật: ${new Date(hist.updated_at).toLocaleTimeString("vi-VN")}`;
+    if (statusEl()) statusEl().textContent = `☁️ 🤖 AI KING DZI — ${hist.history_json.length} phiên — cập nhật: ${new Date(hist.updated_at).toLocaleTimeString("vi-VN")}`;
 
     // Render lịch sử từ cloud
     renderHistBar(app, api);
@@ -475,7 +511,7 @@ async function supaLoadFallback(app, api) {
     if (pred) supaRenderCloudPred(pred, app, api);
 
   } catch(err) {
-    if (statusEl()) statusEl().textContent = "☁️ Không kết nối được cloud";
+    if (statusEl()) statusEl().textContent = "🤖 Không kết nối được AI KING DZI";
   }
 }
 
@@ -491,13 +527,17 @@ function supaRenderCloudPred(pred, app, api) {
 
   pb.innerHTML = `
     <div class="supa-pred-block">
-      <div class="supa-pred-badge">☁️ DỮ LIỆU CLOUD</div>
+      <div class="robot-gif-wrap">
+        <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcW9oaXVsa2M3bGE4NThpNGcwdmRyazZmaGZwenJ4dzgzNHZkcGt2aSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l0HlBO7eyXzSZkJri/giphy.gif" class="robot-gif" alt="AI Robot"/>
+      </div>
+      <div class="supa-pred-badge">🤖 AI KING DZI</div>
       <div class="supa-pred-phien">Phiên #${pred.phien}</div>
+      <div class="dice-anim-row"><span class="dice-spin">🎲</span><span class="dice-spin" style="animation-delay:.15s">🎲</span><span class="dice-spin" style="animation-delay:.3s">🎲</span></div>
       <div class="supa-pred-result">${emoji} <span>${pred.du_doan}</span></div>
       <div class="supa-pred-bar">[${bar}] ${pred.do_tin_cay}%</div>
       <div class="supa-pred-votes">🗳️ ${pred.votes}/${pred.total_methods} phương pháp</div>
       <div class="supa-pred-time">⏰ ${timeStr}</div>
-      <div class="supa-pred-note">⚠️ API sảnh đang lỗi — hiển thị dữ liệu từ Python tool</div>
+
     </div>`;
 }
 
@@ -517,7 +557,7 @@ async function supaStartGameRealtime(app, api) {
     window._histData[app][api.label].push(rec);
     if (window._histData[app][api.label].length > 80) window._histData[app][api.label].shift();
     renderHistBar(app, api);
-    showToast(`☁️ Phiên mới từ cloud: #${row.phien} — ${row.ket_qua || row.ket_qua_truyen_thong || ""}`, "info");
+    showToast(`🤖 AI KING DZI — Phiên mới: #${row.phien} — ${row.ket_qua || row.ket_qua_truyen_thong || ""}`, "info");
   });
 
   await supaSubscribePredictions(app, api.label, row => {
@@ -560,13 +600,39 @@ function renderHistBar(app, api) {
   const bar  = document.getElementById("pred-hist-bar");
   if (!hist.length) { ph?.classList.add("hidden"); return; }
   ph?.classList.remove("hidden"); bar.innerHTML = "";
-  hist.slice(-14).forEach(r => {
+  
+  const recent = hist.slice(-14);
+  const lb = isXD ? ["Chẵn","Lẻ"] : ["Tài","Xỉu"];
+  let tai = 0, xiu = 0;
+  recent.forEach(r => {
     const k = getKq(r, isXD) || "?";
     const d = document.createElement("div");
     d.className = "h-dot " + (RCL[k] || "");
+    d.title = k + (r.phien ? " #" + r.phien : "");
     d.textContent = RE[k] || "?";
     bar.appendChild(d);
+    if (k === lb[0]) tai++;
+    else if (k === lb[1]) xiu++;
   });
+  
+  // Thêm summary lịch sử
+  let summaryEl = document.getElementById("pred-hist-summary");
+  if (!summaryEl) {
+    summaryEl = document.createElement("div");
+    summaryEl.id = "pred-hist-summary";
+    summaryEl.className = "pred-hist-summary";
+    ph.appendChild(summaryEl);
+  }
+  const taiLabel = lb[0]; const xiuLabel = lb[1];
+  const taiEmoji = RE[taiLabel] || "🔴"; const xiuEmoji = RE[xiuLabel] || "🔵";
+  summaryEl.innerHTML = \`
+    <div class="hist-sum-row">
+      <span class="hist-sum-item tai">\${taiEmoji} \${taiLabel}: <strong>\${tai}</strong></span>
+      <span class="hist-sum-sep">·</span>
+      <span class="hist-sum-item xiu">\${xiuEmoji} \${xiuLabel}: <strong>\${xiu}</strong></span>
+    </div>
+    <div class="hist-chuc-mung" id="hist-chuc-mung"></div>
+  \`;
 }
 
 // ── RENDER PREDICTION ──────────────────────────────────────
@@ -587,6 +653,14 @@ function renderPred(app, api, verdict) {
       ? `ĐÚNG! Đoán: ${verdict.pred}`
       : `SAI. Đoán ${verdict.pred} → ${verdict.actual}`;
     verdictHtml = `<div class="verdict-pill ${cls}">${icon} ${msg}</div>`;
+    // Hiện chúc mừng trong lịch sử nếu đúng
+    if (verdict.ok) {
+      const cc = document.getElementById("hist-chuc-mung");
+      if (cc) {
+        cc.innerHTML = `<span class="congrats-blink">🎉 Chúc mừng! Bot đã đoán đúng phiên vừa rồi! 🎉</span>`;
+        setTimeout(() => { if(cc) cc.innerHTML = ""; }, 5000);
+      }
+    }
   }
 
   if (results.length < 5) {
@@ -612,6 +686,12 @@ function renderPred(app, api, verdict) {
   pb.innerHTML = `
     ${verdictHtml}
     <div class="pred-result">
+      <div class="robot-gif-wrap">
+        <img src="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcW9oaXVsa2M3bGE4NThpNGcwdmRyazZmaGZwenJ4dzgzNHZkcGt2aSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l0HlBO7eyXzSZkJri/giphy.gif" class="robot-gif" alt="AI Robot"/>
+      </div>
+      <div class="dice-anim-row">
+        <span class="dice-spin">🎲</span><span class="dice-spin" style="animation-delay:.15s">🎲</span><span class="dice-spin" style="animation-delay:.3s">🎲</span>
+      </div>
       <div class="pred-emoji-big spin-on-change">${RE[best] || "?"}</div>
       <div class="pred-label ${cl}">${best}</div>
       <div class="pred-sub-label">${phienLabel}</div>

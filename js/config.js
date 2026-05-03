@@ -37,6 +37,14 @@ function getMaintenance() { return JSON.parse(localStorage.getItem("tx_maintenan
 function saveMaintenance(m) { localStorage.setItem("tx_maintenance", JSON.stringify(m)); }
 function isUnderMaintenance(app) { return !!getMaintenance()[app]; }
 
+// Logo ảnh thật từ imgur
+const BRAND_IMG = {
+  sunwin:   "https://i.imgur.com/zLTIJFJ.png",
+  xocdia88: "https://i.imgur.com/RrjpISS.png",
+  hitclub:  "https://i.imgur.com/Q3NRQHQ.png",
+  lc79:     "https://i.imgur.com/ZYr1IEi.png",
+  betvip:   "https://i.imgur.com/TFt0SmI.png",
+};
 const BRAND_EMOJI = { sunwin:"☀️", xocdia88:"🎯", hitclub:"🎪", lc79:"🎲", betvip:"💎" };
 const BRAND_COLOR = { sunwin:"#FFD700", xocdia88:"#FF4500", hitclub:"#00CED1", lc79:"#7B68EE", betvip:"#FF69B4" };
 const BRAND_GRADIENT = {
