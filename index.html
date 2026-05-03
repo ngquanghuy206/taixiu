@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Tài Xỉu AI — by Nguyễn Quang Huy Dzi</title>
+
+<!-- ── Favicon / App Icon ── -->
+<link rel="icon" type="image/png" href="https://i.imgur.com/LxMIbmY.png"/>
+<link rel="apple-touch-icon" href="https://i.imgur.com/LxMIbmY.png"/>
+
+<!-- ── SEO ── -->
+<meta name="description" content="Tool dự đoán Tài Xỉu AI — 65 thuật toán: Markov, EMA, MACD, Kalman, LSTM... By Nguyễn Quang Huy Dzi"/>
+<meta name="theme-color" content="#00d4ff"/>
+
+<!-- ── Open Graph (Facebook, Zalo, Discord embed) ── -->
+<meta property="og:type"        content="website"/>
+<meta property="og:title"       content="🎰 Tài Xỉu AI — Tool Dự Đoán"/>
+<meta property="og:description" content="65 thuật toán AI: Markov, EMA, MACD, Bollinger, Kalman, LSTM... Dự đoán theo thời gian thực. By Nguyễn Quang Huy Dzi"/>
+<meta property="og:image"       content="https://i.imgur.com/LxMIbmY.png"/>
+<meta property="og:image:width"  content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta property="og:locale"      content="vi_VN"/>
+
+<!-- ── Twitter Card ── -->
+<meta name="twitter:card"        content="summary_large_image"/>
+<meta name="twitter:title"       content="🎰 Tài Xỉu AI — Tool Dự Đoán"/>
+<meta name="twitter:description" content="65 thuật toán AI dự đoán Tài Xỉu theo thời gian thực. By Nguyễn Quang Huy Dzi"/>
+<meta name="twitter:image"       content="https://i.imgur.com/LxMIbmY.png"/>
+
+<link rel="stylesheet" href="css/styles.css"/>
+</head>
+<body>
+
+<!-- ── AUTH SCREEN ─────────────────────────────────── -->
+<div id="auth-screen">
+  <div class="auth-bg-grid"></div>
+  <div class="auth-box">
+    <div class="auth-corner tl"></div>
+    <div class="auth-corner tr"></div>
+    <div class="auth-corner bl"></div>
+    <div class="auth-corner br"></div>
+    <span class="auth-robot">🤖</span>
+    <div class="auth-logo">TX · AI</div>
+    <div class="auth-sub">Tool Dự Đoán · By Nguyễn Quang Huy Dzi</div>
+    <input id="inp-user" class="auth-field" type="text" placeholder="Tài khoản" autocomplete="off"/>
+    <input id="inp-pass" class="auth-field" type="password" placeholder="Mật khẩu"/>
+    <button class="auth-btn" id="login-btn" onclick="doLogin()">ĐĂNG NHẬP</button>
+    <div class="auth-err" id="auth-err"></div>
+    <div class="auth-copy">© Bản quyền thuộc về Nguyễn Quang Huy Dzi</div>
+  </div>
+</div>
+
+<!-- ── APP ─────────────────────────────────────────── -->
+<div id="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-logo">🎰 TX·AI</div>
+    <div class="topbar-center" id="topbar-center"></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="topbar-user" id="user-display"></div>
+      <button class="ham-btn" onclick="toggleSidebar()">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <!-- OVERLAY -->
+    <div class="overlay-bg" id="overlay-bg" onclick="closeSidebar()"></div>
+
+    <!-- CONTENT -->
+    <div class="content" id="content">
+
+      <!-- HOME PAGE -->
+      <div id="page-home">
+        <div class="home-header">
+          <div class="home-sub">Chọn Sảnh Game</div>
+          <div class="home-title">Sảnh Tài Xỉu AI</div>
+          <div class="home-desc">Chọn sảnh để mở game + xem dự đoán AI theo thời gian thực</div>
+        </div>
+        <div class="home-stats-row">
+          <div class="home-stat">
+            <div class="home-stat-val">42</div>
+            <div class="home-stat-lbl">Thuật Toán</div>
+          </div>
+          <div class="home-stat">
+            <div class="home-stat-val">5</div>
+            <div class="home-stat-lbl">Sảnh Game</div>
+          </div>
+          <div class="home-stat">
+            <div class="home-stat-val">15s</div>
+            <div class="home-stat-lbl">Cập Nhật</div>
+          </div>
+        </div>
+        <div class="lobbies" id="lobby-grid"></div>
+      </div>
+
+      <!-- GAME VIEW (iframe + pred panel) -->
+      <div id="page-game">
+        <!-- mini topbar -->
+        <div class="game-frame-topbar">
+          <button class="back-btn" onclick="goHome()">← Sảnh</button>
+          <div class="game-brand-tag" id="game-brand-tag"></div>
+          <div class="api-tabs" id="api-tabs"></div>
+        </div>
+
+        <!-- iframe area -->
+        <div class="iframe-container">
+          <!-- Blocker nếu web không cho nhúng -->
+          <div class="iframe-blocker hidden" id="iframe-blocker">
+            <div class="iframe-msg">
+              <span class="iframe-msg-icon">🌐</span>
+              <div class="iframe-msg-title">Không thể nhúng trang này</div>
+              <div class="iframe-msg-sub">Trang web sảnh bật <strong>X-Frame-Options</strong> — không cho phép nhúng vào iframe.</div>
+              <button class="open-tab-btn" id="open-tab-btn" onclick="openLobbyTab()">
+                <span>🚀</span> Mở Sảnh Trong Tab Mới
+              </button>
+              <div class="two-window-guide">
+                <div class="two-window-title">💡 Dùng 2 cửa sổ — dễ dùng nhất</div>
+                <div class="two-window-steps">
+                  <div class="tw-step"><span class="tw-num">1</span><span>Nhấn nút trên → sảnh mở ra <strong>tab / cửa sổ mới</strong></span></div>
+                  <div class="tw-step"><span class="tw-num">2</span><span>Kéo tab sảnh ra thành <strong>cửa sổ riêng</strong> (drag ra ngoài thanh tab)</span></div>
+                  <div class="tw-step"><span class="tw-num">3</span><span>Đặt <strong>Tool AI</strong> ở trái · <strong>Sảnh game</strong> ở phải — nhìn cùng lúc</span></div>
+                </div>
+              </div>
+              <div class="iframe-msg-url" id="iframe-msg-url"></div>
+            </div>
+          </div>
+          <iframe id="game-iframe" src="about:blank"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation"
+            referrerpolicy="no-referrer" allowfullscreen></iframe>
+        </div>
+
+        <!-- CALC ANIMATION OVERLAY -->
+        <div id="calc-overlay" class="hidden"></div>
+
+        <!-- PREDICTION PANEL (draggable) -->
+        <div class="pred-panel" id="pred-panel">
+          <div class="pred-head" id="pred-head">
+            <div class="pred-head-title">
+              <span class="pred-head-dot"></span>🧠 DỰ ĐOÁN AI
+            </div>
+            <button class="pred-close" onclick="closePred()">✕</button>
+          </div>
+          <div class="pred-body" id="pred-body">
+            <div class="pred-loading">
+              <div class="loading-orbit"><div class="orbit-ring"></div><div class="orbit-dot"></div></div>
+              <span>Đang phân tích...</span>
+            </div>
+          </div>
+          <div class="pred-hist hidden" id="pred-hist">
+            <div class="pred-hist-label">Lịch sử 14 phiên</div>
+            <div class="pred-hist-bar" id="pred-hist-bar"></div>
+          </div>
+        </div>
+        <button class="pred-reopen hidden" id="pred-reopen" onclick="openPred()">🧠 Dự Đoán</button>
+      </div>
+
+      <!-- ADMIN PAGE -->
+      <div id="page-admin">
+        <div class="admin-head">
+          <div class="admin-title">👑 Quản Lý Tài Khoản</div>
+          <button class="create-btn" onclick="openCreate()">+ TẠO TÀI KHOẢN</button>
+        </div>
+        <div class="admin-stats">
+          <div class="admin-stat-card">
+            <div class="admin-stat-val" id="user-count">0</div>
+            <div class="admin-stat-lbl">Tổng TK</div>
+          </div>
+          <div class="admin-stat-card">
+            <div class="admin-stat-val" id="active-count">0</div>
+            <div class="admin-stat-lbl">Đang hoạt động</div>
+          </div>
+        </div>
+        <div class="user-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Tài Khoản</th>
+                <th>Trạng Thái</th>
+                <th>Còn lại</th>
+                <th>IP Thiết Bị</th>
+                <th>Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody id="user-list"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <div class="sidebar-title">MENU</div>
+        <button class="close-btn" onclick="closeSidebar()">✕</button>
+      </div>
+      <div class="sidebar-nav">
+        <div class="nav-item active" id="nav-home" onclick="showHome()">
+          <span class="nav-icon">🏠</span>Trang Chủ
+        </div>
+        <div class="nav-item" id="nav-admin" style="display:none" onclick="showAdmin()">
+          <span class="nav-icon">👑</span>Quản Lý TK
+        </div>
+        <div class="nav-item nav-logout" onclick="doLogout()">
+          <span class="nav-icon">🚪</span>Đăng Xuất
+        </div>
+      </div>
+      <div class="sidebar-support">
+        <div class="support-title">Hỗ Trợ</div>
+        <div class="support-btns">
+          <a href="#" class="sup-btn zalo">💬 Zalo</a>
+          <a href="#" class="sup-btn discord">🎮 Discord</a>
+          <a href="#" class="sup-btn tele">✈️ Telegram</a>
+          <a href="#" class="sup-btn fb">📘 Facebook</a>
+        </div>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-copy">© Bản quyền thuộc về<br/><strong>Nguyễn Quang Huy Dzi</strong><br/>🧠 42 Thuật Toán AI</div>
+        <button class="logout-btn" onclick="doLogout()">🚪 Đăng Xuất</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TẠO/SỬA TÀI KHOẢN -->
+<div class="modal-overlay hidden" id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">TẠO TÀI KHOẢN MỚI</div>
+    <div class="modal-field">
+      <label class="modal-label">Tài khoản</label>
+      <input id="m-user" class="modal-input" type="text" placeholder="username" autocomplete="off"/>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Mật khẩu</label>
+      <input id="m-pass" class="modal-input" type="password" placeholder="password"/>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Thời hạn (ngày)</label>
+      <input id="m-days" class="modal-input" type="number" placeholder="30" min="1"/>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeModal()">Huỷ</button>
+      <button class="modal-submit" onclick="submitUser()">XÁC NHẬN</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCRIPTS (thứ tự quan trọng) -->
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/algorithms.js"></script>
+<script src="js/app.js"></script>
+<script>
+  // Enter to login
+  document.getElementById("inp-pass").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+  document.getElementById("inp-user").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("inp-pass").focus(); });
+</script>
+</body>
+</html>
