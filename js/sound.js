@@ -147,6 +147,7 @@ window.TxSound = (function () {
   function updateSidebarBtns() {
     const mBtn = document.getElementById("sidebar-music-btn");
     const sBtn = document.getElementById("sidebar-sfx-btn");
+    const tBtn = document.getElementById("sidebar-tts-btn");
     if (mBtn) {
       mBtn.innerHTML = _musicOn
         ? `<span class="snav-icon">🎵</span><span class="snav-label">Nhạc Nền</span><span class="snav-toggle on">BẬT</span>`
@@ -157,6 +158,18 @@ window.TxSound = (function () {
         ? `<span class="snav-icon">🔊</span><span class="snav-label">Âm Thanh</span><span class="snav-toggle on">BẬT</span>`
         : `<span class="snav-icon">🔇</span><span class="snav-label">Âm Thanh</span><span class="snav-toggle off">TẮT</span>`;
     }
+    if (tBtn) {
+      const ttsOn = window.TxTTS ? window.TxTTS.isOn() : true;
+      tBtn.innerHTML = ttsOn
+        ? `<span class="snav-icon">🗣️</span><span class="snav-label">Giọng Đọc AI</span><span class="snav-toggle on">BẬT</span>`
+        : `<span class="snav-icon">🔕</span><span class="snav-label">Giọng Đọc AI</span><span class="snav-toggle off">TẮT</span>`;
+    }
+  }
+
+  function toggleTts() {
+    if (window.TxTTS) window.TxTTS.toggle();
+    updateSidebarBtns();
+    if (_sfxOn) Sounds.toggle();
   }
 
   function injectSidebarBtns() {
@@ -172,6 +185,7 @@ window.TxSound = (function () {
       <div class="sidebar-sound-title">⚙️ ÂM THANH</div>
       <button id="sidebar-music-btn" class="sidebar-sound-btn" onclick="TxSound.toggleMusic()"></button>
       <button id="sidebar-sfx-btn"   class="sidebar-sound-btn" onclick="TxSound.toggleSfx()"></button>
+      <button id="sidebar-tts-btn"   class="sidebar-sound-btn" onclick="TxSound.toggleTts()"></button>
     `;
     if (logoutItem) nav.insertBefore(soundSection, logoutItem);
     else nav.appendChild(soundSection);
@@ -256,6 +270,7 @@ window.TxSound = (function () {
     startMusic,
     toggleMusic,
     toggleSfx,
+    toggleTts,
     isMusic: () => _musicOn,
     isSfx: () => _sfxOn,
     // backward compat
@@ -266,4 +281,74 @@ window.TxSound = (function () {
     injectSidebarBtns,
     updateSidebarBtns,
   };
+})();
+
+// ═══════════════════════════════════════════════════════════
+//  TEXT-TO-SPEECH — Giọng Google Tiếng Việt
+//  Đọc kết quả dự đoán mới: "Dự đoán phiên 123 sẽ ra Tài"
+// ═══════════════════════════════════════════════════════════
+window.TxTTS = (function() {
+  const KEY_TTS = "tx_tts_on";
+  let _on = localStorage.getItem(KEY_TTS) !== "false";
+  let _synth = window.speechSynthesis;
+  let _voiceVI = null;
+  let _lastSpoken = ""; // tránh đọc trùng
+
+  // Load voice tiếng Việt
+  function loadVoice() {
+    if (!_synth) return;
+    const tryLoad = () => {
+      const voices = _synth.getVoices();
+      // Ưu tiên Google Vietnamese
+      _voiceVI = voices.find(v => v.lang === "vi-VN" && v.name.toLowerCase().includes("google"))
+              || voices.find(v => v.lang === "vi-VN")
+              || voices.find(v => v.lang.startsWith("vi"))
+              || null;
+    };
+    tryLoad();
+    if (_synth.onvoiceschanged !== undefined) _synth.onvoiceschanged = tryLoad;
+  }
+
+  function speak(text) {
+    if (!_on || !_synth) return;
+    if (text === _lastSpoken) return; // tránh đọc lại
+    _lastSpoken = text;
+    // Cancel giọng đang đọc
+    try { _synth.cancel(); } catch(e) {}
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "vi-VN";
+    utter.rate = 0.95;
+    utter.pitch = 1.05;
+    utter.volume = 1;
+    if (_voiceVI) utter.voice = _voiceVI;
+    try { _synth.speak(utter); } catch(e) {}
+  }
+
+  // Đọc kết quả dự đoán: "Dự đoán phiên 2628447 sẽ ra Tài"
+  function announcePredict(phien, result) {
+    if (!phien || !result) return;
+    const text = `Dự đoán phiên ${phien} sẽ ra ${result}`;
+    speak(text);
+  }
+
+  // Đọc kết quả đúng/sai
+  function announceVerdict(ok, pred, actual) {
+    if (ok) speak(`Chính xác! Bot đoán đúng ${pred}`);
+    else speak(`Sai rồi! Bot đoán ${pred}, kết quả thực tế là ${actual}`);
+  }
+
+  function toggle() {
+    _on = !_on;
+    localStorage.setItem(KEY_TTS, _on);
+    if (_on) loadVoice();
+    return _on;
+  }
+
+  function isOn() { return _on; }
+
+  // Init
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadVoice);
+  else loadVoice();
+
+  return { speak, announcePredict, announceVerdict, toggle, isOn };
 })();

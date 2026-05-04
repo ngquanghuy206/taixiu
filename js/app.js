@@ -786,6 +786,11 @@ async function supaStartGameRealtime(app, api) {
     const hist = window._histData[app]?.[api.label] || [];
     const curPhien = hist.length > 0 ? hist[hist.length - 1].phien : row.phien;
     window._pendingPred[app][api.label] = { pred: row.du_doan, pendingPhien: curPhien };
+    // TTS đọc dự đoán realtime
+    if (window.TxTTS && row.du_doan && row.phien) {
+      const nextP = parseInt(row.phien) + 1;
+      try { window.TxTTS.announcePredict(nextP, row.du_doan); } catch(e) {}
+    }
     supaRenderCloudPred(row, app, api);
   });
 }
@@ -928,6 +933,8 @@ function renderPred(app, api, verdict) {
     verdictHtml = `<div class="verdict-pill ${cls}">${icon} ${msg}</div>`;
     // Sound feedback
     if (window.TxSound) { try { verdict.ok ? window.TxSound.play.success() : window.TxSound.play.error(); } catch(e) {} }
+    // TTS đọc kết quả đúng/sai
+    if (window.TxTTS) { try { window.TxTTS.announceVerdict(verdict.ok, verdict.pred, verdict.actual); } catch(e) {} }
     // Hiện chúc mừng trong lịch sử nếu đúng
     if (verdict.ok) {
       const cc = document.getElementById("hist-chuc-mung");
@@ -949,6 +956,10 @@ function renderPred(app, api, verdict) {
   const curPhien = hist.length > 0 ? hist[hist.length - 1].phien : "?";
   const nextPhien = curPhien !== "?" ? (parseInt(curPhien) + 1) : "?";
   window._pendingPred[app][api.label] = { pred: best, pendingPhien: curPhien };
+  // TTS đọc dự đoán mới
+  if (window.TxTTS) {
+    try { window.TxTTS.announcePredict(nextPhien, best); } catch(e) {}
+  }
   const cl          = RCL[best] || "";
   const acc         = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "N/A";
   const streakLb    = results.length > 0 ? results[results.length - 1] : "?";
