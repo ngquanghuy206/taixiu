@@ -35,6 +35,24 @@ function startTopbarCountdown(expireAt) {
 }
 
 // ── LAUNCH APP ─────────────────────────────────────────────
+// ── PRELOAD STATS CHO TẤT CẢ SẢNH (badge %) ──────────────
+async function preloadAllStats() {
+  try {
+    const rows = await supaFetchAllLatest();
+    if (!Array.isArray(rows)) return;
+    rows.forEach(row => {
+      if (!row.stats_json) return;
+      const app   = row.app;
+      const label = row.api_label;
+      if (!window._statData[app]) window._statData[app] = {};
+      window._statData[app][label] = {
+        d: row.stats_json.dung || 0,
+        s: row.stats_json.sai  || 0
+      };
+    });
+  } catch(e) { console.warn("preloadAllStats lỗi:", e); }
+}
+
 function launchApp() {
   try {
     document.getElementById("auth-screen").style.display = "none";
@@ -69,8 +87,9 @@ function launchApp() {
       }
     }
 
-    buildLobbies();
     showHome();
+    // Preload stats tất cả sảnh → hiện badge % ngay lập tức
+    preloadAllStats().then(() => buildLobbies());
   } catch(err) {
     console.error("[launchApp] Lỗi:", err);
     // Reset màn hình auth nếu launch thất bại
@@ -134,14 +153,14 @@ function showLobbyManager() {
   document.getElementById("nav-admin")?.classList.remove("active");
   document.getElementById("nav-lobby-mgr")?.classList.add("active");
   closeSidebar();
-  renderLobbyManager();
+  renderLobbyManager(); // async — intentional fire-and-forget for UI
 }
 
-function renderLobbyManager() {
+async function renderLobbyManager() {
   const g = document.getElementById("lobby-mgr-grid");
   if (!g) return;
   g.innerHTML = "";
-  const maint = getMaintenance();
+  const maint = await getMaintenance();
   // Lấy tất cả sảnh từ APIS (đảm bảo đủ 5)
   const allApps = Object.keys(APIS);
   allApps.forEach((app) => {
@@ -192,29 +211,30 @@ function askMaintenance(app, enable) {
 
 function closeMaintModal() { document.getElementById("maint-overlay").classList.add("hidden"); }
 
-function confirmMaintAction() {
-  const maint = getMaintenance();
+async function confirmMaintAction() {
+  const btn = document.getElementById("maint-confirm-btn");
+  btn.disabled = true;
   if (_maintAction) {
-    maint[_maintTarget] = true;
+    await saveMaintenance(_maintTarget, true);
     showToast(`🔧 Sảnh ${_maintTarget.toUpperCase()} đang bảo trì`);
   } else {
-    delete maint[_maintTarget];
+    await saveMaintenance(_maintTarget, false);
     showToast(`✅ Sảnh ${_maintTarget.toUpperCase()} đã hoạt động trở lại`);
   }
-  saveMaintenance(maint);
+  btn.disabled = false;
   closeMaintModal();
-  renderLobbyManager();
-  buildLobbies(); // refresh home lobby grid
+  await renderLobbyManager();
+  await buildLobbies(); // refresh home lobby grid
 }
 
 function goHome() { showHome(); }
 
 // ── LOBBIES ────────────────────────────────────────────────
-function buildLobbies() {
+async function buildLobbies() {
   const g = document.getElementById("lobby-grid");
   if (!g) return;
   g.innerHTML = "";
-  const maint = getMaintenance();
+  const maint = await getMaintenance();
   Object.entries(APIS).forEach(([app, apis]) => {
     const em      = BRAND_EMOJI[app] || "🎰";
     const grad    = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";
@@ -242,7 +262,7 @@ function buildLobbies() {
         <div class="lobby-name">${app.toUpperCase()}</div>
         <div class="lobby-enter" style="color:${isMaint ? "#ff6b35" : col}">${isMaint ? "🔧 Đang bảo trì" : "Vào sảnh →"}</div>
       </div>`;
-    c.onclick = () => isMaint ? showToast("🔧 Chức năng này đang được bảo trì!", "warn") : openGame(app);
+    c.onclick = () => isMaint ? showToast("🔧 Chức năng này đang được bảo trì!", "warn") : openWebview(app);
     g.appendChild(c);
     setTimeout(() => c.classList.add("visible"), 50 * Object.keys(APIS).indexOf(app));
   });
@@ -313,6 +333,83 @@ function openGame(app) {
 // ── IFRAME LOAD ────────────────────────────────────────────
 // ── LOBBY POPUP WINDOW ────────────────────────────────────
 window._lobbyPopup = null;
+
+// ── WEBVIEW MODAL ─────────────────────────────────────────
+window._webviewUrl = "";
+
+function openWebview(app) {
+  const rawUrl = LOBBY_URLS[app] || "";
+  if (!rawUrl) return;
+  // Dùng proxy nếu đã cấu hình PROXY_BASE
+  const url = (typeof PROXY_BASE !== "undefined" && PROXY_BASE)
+    ? `${PROXY_BASE}/proxy?url=${encodeURIComponent(rawUrl)}`
+    : rawUrl;
+  window._webviewUrl = rawUrl; // nút "mở tab ngoài" vẫn dùng URL gốc
+  window._webviewProxyUrl = url;
+  const em   = BRAND_EMOJI[app] || "🎮";
+  const name = app.toUpperCase();
+  document.getElementById("webview-title").textContent = `${em} ${name}`;
+
+  const overlay  = document.getElementById("webview-overlay");
+  const iframe   = document.getElementById("webview-iframe");
+  const loading  = document.getElementById("webview-loading");
+  const blocked  = document.getElementById("webview-blocked");
+
+  // Reset state
+  blocked.classList.add("hidden");
+  loading.style.display = "flex";
+  iframe.src = "about:blank";
+  overlay.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+
+  // Load iframe
+  setTimeout(() => {
+    iframe.src = window._webviewProxyUrl || url;
+    iframe.onload = () => {
+      loading.style.display = "none";
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc || doc.location.href === "about:blank") {
+          blocked.classList.remove("hidden");
+        }
+      } catch {
+        // cross-origin blocked — still loaded fine visually
+        loading.style.display = "none";
+      }
+    };
+    iframe.onerror = () => {
+      loading.style.display = "none";
+      blocked.classList.remove("hidden");
+    };
+    // Timeout 5s — nếu không load được
+    setTimeout(() => {
+      if (loading.style.display !== "none") {
+        loading.style.display = "none";
+        try {
+          const doc = iframe.contentDocument;
+          if (!doc || doc.URL === "about:blank" || doc.body === null) {
+            blocked.classList.remove("hidden");
+          }
+        } catch {
+          blocked.classList.remove("hidden");
+        }
+      }
+    }, 5000);
+  }, 80);
+}
+
+function closeWebview() {
+  const overlay = document.getElementById("webview-overlay");
+  const iframe  = document.getElementById("webview-iframe");
+  overlay.classList.add("hidden");
+  iframe.src = "about:blank";
+  document.body.style.overflow = "";
+  window._webviewUrl = "";
+}
+
+function openWebviewExternal() {
+  if (window._webviewUrl) window.open(window._webviewUrl, "_blank");
+}
 
 function openLobbyPopup() {
   const url = document.getElementById("iframe-msg-url").textContent;
@@ -420,45 +517,58 @@ function switchApi(i) {
 }
 
 // ── PREDICTION PANEL ───────────────────────────────────────
-function openPred()  { window._predOpen = true;  document.getElementById("pred-panel").classList.remove("hidden"); document.getElementById("pred-reopen").classList.add("hidden"); }
-function closePred() { window._predOpen = false; document.getElementById("pred-panel").classList.add("hidden");    document.getElementById("pred-reopen").classList.remove("hidden"); }
+function openPred() {
+  window._predOpen = true;
+  document.getElementById("pred-panel").classList.remove("hidden");
+  document.getElementById("pred-reopen").classList.add("hidden");
+}
+function closePred() {
+  window._predOpen = false;
+  document.getElementById("pred-panel").classList.add("hidden");
+  document.getElementById("pred-reopen").classList.remove("hidden");
+}
+function togglePredCollapse() {
+  const panel = document.getElementById("pred-panel");
+  const btn   = document.getElementById("pred-toggle-btn");
+  const collapsed = panel.classList.toggle("collapsed");
+  if (btn) btn.textContent = collapsed ? "▸" : "▾";
+}
 
-// Draggable panel
+// Draggable panel — fixed position, drag anywhere on screen
 (function() {
-  let dragging = false, ox = 0, oy = 0, startR = 0, startT = 0;
+  let dragging = false, ox = 0, oy = 0, startX = 0, startY = 0;
   document.addEventListener("DOMContentLoaded", () => {
     const head  = document.getElementById("pred-head");
     const panel = document.getElementById("pred-panel");
     if (!head || !panel) return;
-    head.addEventListener("mousedown", e => {
-      dragging = true; ox = e.clientX; oy = e.clientY;
+
+    function startDrag(cx, cy) {
+      dragging = true; ox = cx; oy = cy;
       const rect = panel.getBoundingClientRect();
-      startR = window.innerWidth - rect.right; startT = rect.top;
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup",   onUp);
-    });
-    // Touch support
-    head.addEventListener("touchstart", e => {
-      const t = e.touches[0];
-      dragging = true; ox = t.clientX; oy = t.clientY;
-      const rect = panel.getBoundingClientRect();
-      startR = window.innerWidth - rect.right; startT = rect.top;
-    });
-    document.addEventListener("touchmove", e => {
+      startX = rect.left; startY = rect.top;
+      // Switch to left/top positioning for easier math
+      panel.style.right  = "auto";
+      panel.style.bottom = "auto";
+      panel.style.left   = startX + "px";
+      panel.style.top    = startY + "px";
+    }
+    function moveDrag(cx, cy) {
       if (!dragging) return;
-      const t = e.touches[0];
-      const dx = ox - t.clientX, dy = t.clientY - oy;
-      panel.style.right = Math.max(0, startR + dx) + "px";
-      panel.style.top   = Math.max(44, startT + dy) + "px";
-    });
+      const dx = cx - ox, dy = cy - oy;
+      const W  = window.innerWidth, H = window.innerHeight;
+      const pw = panel.offsetWidth,  ph = panel.offsetHeight;
+      const nx = Math.max(0, Math.min(W - pw, startX + dx));
+      const ny = Math.max(0, Math.min(H - ph, startY + dy));
+      panel.style.left = nx + "px";
+      panel.style.top  = ny + "px";
+    }
+
+    head.addEventListener("mousedown", e => { startDrag(e.clientX, e.clientY); document.addEventListener("mousemove", onMove); document.addEventListener("mouseup", onUp); });
+    head.addEventListener("touchstart", e => { e.preventDefault(); const t = e.touches[0]; startDrag(t.clientX, t.clientY); }, { passive: false });
+    document.addEventListener("touchmove", e => { if (!dragging) return; e.preventDefault(); const t = e.touches[0]; moveDrag(t.clientX, t.clientY); }, { passive: false });
     document.addEventListener("touchend", () => { dragging = false; });
   });
-  function onMove(e) {
-    if (!dragging) return;
-    const dx = ox - e.clientX, dy = e.clientY - oy;
-    document.getElementById("pred-panel").style.right = Math.max(0, startR + dx) + "px";
-    document.getElementById("pred-panel").style.top   = Math.max(44, startT + dy) + "px";
-  }
+  function onMove(e) { moveDrag(e.clientX, e.clientY); }
   function onUp() { dragging = false; document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); }
 })();
 

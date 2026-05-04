@@ -24,6 +24,11 @@ const APIS = {
   ],
 };
 
+// ── PROXY (Cloudflare Worker) ───────────────────────────────
+// Sau khi deploy worker, thay "" bằng URL worker của bạn
+// VD: "https://tx-proxy.ten-ban.workers.dev"
+const PROXY_BASE = "https://tx-proxy.ngquanghuyhw7.workers.dev";
+
 const LOBBY_URLS = {
   sunwin:   "https://sunwin.mw",
   xocdia88: "https://play.xocdia88.green",
@@ -32,10 +37,41 @@ const LOBBY_URLS = {
   betvip:   "https://play.betvip.fit/?utm_source=seo&utm_campaign=betvip.mobi&utm_medium=betvip.mobi&utm_term=betvip.mobi",
 };
 
-// ── MAINTENANCE STATE ───────────────────────────────────────
-function getMaintenance() { return JSON.parse(localStorage.getItem("tx_maintenance") || "{}"); }
-function saveMaintenance(m) { localStorage.setItem("tx_maintenance", JSON.stringify(m)); }
-function isUnderMaintenance(app) { return !!getMaintenance()[app]; }
+// ── MAINTENANCE STATE (Supabase — sync cho tất cả user) ────
+let _maintCache = null;
+
+async function getMaintenance() {
+  try {
+    const r = await fetch(`${SUPA_URL}/rest/v1/tx_maintenance?select=app,enabled`, {
+      headers: _SH()
+    });
+    if (!r.ok) return _maintCache || {};
+    const rows = await r.json();
+    const m = {};
+    rows.forEach(row => { if (row.enabled) m[row.app] = true; });
+    _maintCache = m;
+    return m;
+  } catch { return _maintCache || {}; }
+}
+
+async function saveMaintenance(app, enabled) {
+  try {
+    const r = await fetch(`${SUPA_URL}/rest/v1/tx_maintenance`, {
+      method: "POST",
+      headers: { ..._SH(), "Prefer": "resolution=merge-duplicates,return=representation" },
+      body: JSON.stringify({ app, enabled })
+    });
+    if (!r.ok) console.error("saveMaintenance lỗi:", await r.text());
+    if (!_maintCache) _maintCache = {};
+    if (enabled) _maintCache[app] = true;
+    else delete _maintCache[app];
+  } catch(e) { console.error("saveMaintenance exception:", e); }
+}
+
+async function isUnderMaintenance(app) {
+  const m = await getMaintenance();
+  return !!m[app];
+}
 
 // Logo ảnh thật từ thư mục img/
 const BRAND_IMG = {

@@ -107,6 +107,82 @@ function stopExpireCountdown() {
   window._expireAt = null;
 }
 
+// ── CAPTCHA ────────────────────────────────────────────────
+let _captchaAnswer  = 0;
+let _captchaChosen  = null;
+
+function refreshCaptcha() {
+  const ops = ["+", "-", "×"];
+  const op  = ops[Math.floor(Math.random() * ops.length)];
+  let a, b, ans;
+  if (op === "+") {
+    a = Math.floor(Math.random() * 9) + 1;
+    b = Math.floor(Math.random() * 9) + 1;
+    ans = a + b;
+  } else if (op === "-") {
+    a = Math.floor(Math.random() * 9) + 3;
+    b = Math.floor(Math.random() * (a - 2)) + 1;
+    ans = a - b;
+  } else {
+    a = Math.floor(Math.random() * 4) + 2;
+    b = Math.floor(Math.random() * 4) + 2;
+    ans = a * b;
+  }
+  _captchaAnswer = ans;
+  _captchaChosen = null;
+
+  const el = document.getElementById("captcha-question");
+  if (el) el.textContent = `${a} ${op} ${b}`;
+
+  const err = document.getElementById("captcha-err");
+  if (err) err.textContent = "";
+
+  // Tạo 9 lựa chọn: 1 đúng + 8 sai ngẫu nhiên, xáo trộn
+  const choices = new Set([ans]);
+  while (choices.size < 9) {
+    const delta = Math.floor(Math.random() * 10) - 5;
+    const fake  = ans + (delta === 0 ? 1 : delta);
+    if (fake > 0) choices.add(fake);
+  }
+  const shuffled = [...choices].sort(() => Math.random() - 0.5);
+
+  const container = document.getElementById("captcha-btns");
+  if (!container) return;
+  container.innerHTML = "";
+  shuffled.forEach(num => {
+    const btn = document.createElement("button");
+    btn.className   = "captcha-choice-btn";
+    btn.textContent = num;
+    btn.type        = "button";
+    btn.onclick = () => selectCaptchaChoice(btn, num);
+    container.appendChild(btn);
+  });
+}
+
+function selectCaptchaChoice(btn, num) {
+  _captchaChosen = num;
+  // Visual feedback
+  document.querySelectorAll(".captcha-choice-btn").forEach(b => b.classList.remove("selected"));
+  btn.classList.add("selected");
+  document.getElementById("captcha-err").textContent = "";
+}
+
+function verifyCaptcha() {
+  if (_captchaChosen === null) {
+    document.getElementById("captcha-err").textContent = "Vui lòng chọn kết quả ☝️";
+    return false;
+  }
+  if (_captchaChosen !== _captchaAnswer) {
+    document.getElementById("captcha-err").textContent = "Kết quả không đúng, thử lại! ❌";
+    refreshCaptcha();
+    return false;
+  }
+  return true;
+}
+
+// Init captcha khi trang load
+document.addEventListener("DOMContentLoaded", refreshCaptcha);
+
 // ── ĐĂNG NHẬP ──────────────────────────────────────────────
 async function doLogin() {
   const u   = document.getElementById("inp-user").value.trim();
@@ -114,6 +190,7 @@ async function doLogin() {
   const btn = document.getElementById("login-btn");
 
   if (!u || !p) { showAuthErr("Vui lòng nhập đầy đủ thông tin"); return; }
+  if (!verifyCaptcha()) return;
 
   btn.disabled = true;
   btn.innerHTML = `<span class="btn-spin"></span> Đang xác thực...`;
@@ -126,6 +203,10 @@ async function doLogin() {
       window._isAdmin  = true;
       window._expireAt = null;
       getClientIP().then(ip => { window._clientIP = ip; }).catch(() => {});
+      const remEl = document.getElementById("chk-remember");
+      if (remEl && remEl.checked) localStorage.setItem("tx_remember", JSON.stringify({u,p}));
+      else localStorage.removeItem("tx_remember");
+      refreshCaptcha();
       await animateLogin();
       btn.disabled = false;
       btn.innerHTML = "ĐĂNG NHẬP";
@@ -180,6 +261,10 @@ async function doLogin() {
     window._clientIP    = ip;
     window._userExpires = acc.expires;
     window._expireAt    = new Date(acc.expires).getTime();
+    // Lưu đăng nhập
+    const rememberEl2 = document.getElementById("chk-remember");
+    if (rememberEl2 && rememberEl2.checked) localStorage.setItem("tx_remember", JSON.stringify({u,p}));
+    else localStorage.removeItem("tx_remember");
     await animateLogin();
     btn.disabled = false;
     btn.innerHTML = "ĐĂNG NHẬP";
