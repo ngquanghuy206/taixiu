@@ -27,7 +27,7 @@ const APIS = {
 // ── PROXY (Cloudflare Worker) ───────────────────────────────
 // Sau khi deploy worker, thay "" bằng URL worker của bạn
 // VD: "https://tx-proxy.ten-ban.workers.dev"
-const PROXY_BASE = "https://tx-proxy.onrender.com";
+const PROXY_BASE = "https://fi10.bot-hosting.net:20259";
 
 const LOBBY_URLS = {
   sunwin:   "https://sunwin.mw",
