@@ -177,21 +177,26 @@
           <div class="api-tabs" id="api-tabs"></div>
         </div>
 
-        <!-- GAME HUB LAYOUT — 2 cột: AI Panel + History Panel -->
-        <div class="game-hub-layout">
+        <!-- NEW LAYOUT: dọc, full scroll -->
+        <div class="game-new-layout" id="game-new-layout">
 
-          <!-- CỘT TRÁI: AI PREDICTION (đây là pred-panel cũ, giờ in-flow) -->
-          <div class="hub-left">
-            <div class="hub-section-label">🤖 AI KING DZI — DỰ ĐOÁN</div>
+          <!-- KHỐI 1: AI PREDICTION + 2 NÚT (sảnh + lịch sử) -->
+          <div class="game-pred-block">
+            <div class="game-pred-header">
+              <span class="pred-head-dot"></span>🧠 DỰ ĐOÁN AI
+              <button class="pred-toggle-btn" id="pred-toggle-btn" onclick="togglePredCollapse()" title="Thu gọn">▾</button>
+            </div>
+            <!-- 2 NÚT: SẢNH + LỊCH SỬ trong cùng 1 hàng -->
+            <div class="game-action-row">
+              <button class="game-action-btn game-lobby-btn" onclick="refocusLobbyWindow()">
+                🎮 <span>Vào Sảnh Game</span>
+              </button>
+              <button class="game-action-btn game-hist-btn" id="game-hist-btn" onclick="triggerHistModal()">
+                📋 <span>Lịch Sử</span>
+              </button>
+            </div>
+            <!-- PRED BODY -->
             <div class="pred-panel-inline" id="pred-panel">
-              <div class="pred-head" id="pred-head">
-                <div class="pred-head-title">
-                  <span class="pred-head-dot"></span>🧠 DỰ ĐOÁN AI
-                </div>
-                <div class="pred-head-actions">
-                  <button class="pred-toggle-btn" id="pred-toggle-btn" onclick="togglePredCollapse()" title="Thu gọn">▾</button>
-                </div>
-              </div>
               <div class="pred-body" id="pred-body">
                 <div class="pred-loading">
                   <div class="loading-orbit"><div class="orbit-ring"></div><div class="orbit-dot"></div></div>
@@ -205,9 +210,9 @@
             </div>
           </div>
 
-          <!-- CỘT PHẢI: LỊCH SỬ KẾT QUẢ THỰC TẾ -->
-          <div class="hub-right">
-            <div class="hub-section-label">📋 KẾT QUẢ THỰC TẾ</div>
+          <!-- KHỐI 2: KẾT QUẢ THỰC TẾ (compact) -->
+          <div class="game-hist-block">
+            <div class="game-hist-header">📋 KẾT QUẢ THỰC TẾ</div>
             <div class="hub-hist-panel" id="hub-hist-panel">
               <div class="hub-hist-empty">⏳ Đang chờ dữ liệu từ sảnh...</div>
             </div>
@@ -215,14 +220,10 @@
 
         </div>
 
-        <!-- FLOATING LOBBY BUTTON — luôn hiện khi trong game -->
-        <button class="lobby-float-btn" id="lobby-float-btn" onclick="refocusLobbyWindow()">
-          🎮 Vào Sảnh
-        </button>
-
         <!-- CALC ANIMATION OVERLAY -->
         <div id="calc-overlay" class="hidden"></div>
-        <!-- pred-reopen placeholder (hidden, not used in new layout) -->
+        <!-- hidden compat -->
+        <button class="lobby-float-btn hidden" id="lobby-float-btn" onclick="refocusLobbyWindow()">🎮 Vào Sảnh</button>
         <button class="pred-reopen hidden" id="pred-reopen" onclick="openPred()">🧠 Dự Đoán</button>
       </div>
 
