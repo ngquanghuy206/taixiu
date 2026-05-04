@@ -106,6 +106,8 @@ function launchApp() {
 function toggleSidebar() {
   document.getElementById("sidebar").classList.toggle("open");
   document.getElementById("overlay-bg").classList.toggle("open");
+  // Inject sound controls if not yet added
+  if (window.TxSound) setTimeout(() => { try { window.TxSound.injectSidebarBtns(); window.TxSound.updateSidebarBtns(); } catch(e) {} }, 50);
 }
 function closeSidebar() {
   document.getElementById("sidebar").classList.remove("open");
