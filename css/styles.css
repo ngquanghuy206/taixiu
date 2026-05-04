@@ -1595,3 +1595,188 @@ body::after{
   border-radius: 10px !important;
   box-shadow: 0 0 20px rgba(0,212,255,.08) !important;
 }
+
+/* ═══════════════════════════════════════════════════
+   NEW GAME PAGE LAYOUT — Dọc, Full Scroll
+   ═══════════════════════════════════════════════════ */
+
+/* page-game: flex column, overflow scroll */
+#page-game {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.game-new-layout {
+  flex: 1;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-bottom: 20px;
+}
+.game-new-layout::-webkit-scrollbar { width: 3px; }
+.game-new-layout::-webkit-scrollbar-thumb { background: rgba(0,212,255,.2); border-radius: 2px; }
+
+/* ── PRED BLOCK ── */
+.game-pred-block {
+  background: linear-gradient(180deg, rgba(8,18,38,.98), rgba(4,12,26,.99));
+  border-bottom: 1px solid rgba(0,212,255,.1);
+  flex-shrink: 0;
+}
+
+.game-pred-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px 8px;
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(90deg, rgba(0,212,255,.08), rgba(0,100,200,.04));
+  border-bottom: 1px solid rgba(0,212,255,.1);
+  color: var(--accent);
+}
+.game-pred-header .pred-head-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  flex-shrink: 0;
+}
+.game-pred-header .pred-toggle-btn {
+  margin-left: auto;
+  background: none; border: none; color: var(--muted);
+  font-size: 16px; cursor: pointer; line-height: 1;
+  transition: .15s; padding: 2px 6px;
+}
+.game-pred-header .pred-toggle-btn:hover { color: var(--accent); }
+
+/* ── 2 ACTION BUTTONS ── */
+.game-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(0,0,0,.15);
+  border-bottom: 1px solid rgba(0,212,255,.07);
+}
+
+.game-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 10px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  font-family: 'Orbitron', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  transition: all .22s;
+  position: relative;
+  overflow: hidden;
+}
+.game-action-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.06), transparent 50%);
+  pointer-events: none;
+}
+.game-lobby-btn {
+  background: linear-gradient(135deg, #5865f2, #7b68ee, #4752c4);
+  background-size: 200%;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(88,101,242,.35), inset 0 1px 0 rgba(255,255,255,.12);
+  animation: btnGradShift 4s ease infinite;
+}
+.game-lobby-btn:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 7px 24px rgba(88,101,242,.55);
+}
+.game-lobby-btn:active { transform: translateY(0) scale(.98); }
+
+.game-hist-btn {
+  background: linear-gradient(135deg, rgba(0,212,255,.15), rgba(0,100,200,.12));
+  color: var(--accent);
+  border: 1.5px solid rgba(0,212,255,.35);
+  box-shadow: 0 4px 16px rgba(0,212,255,.1), inset 0 1px 0 rgba(255,255,255,.05);
+}
+.game-hist-btn:hover {
+  background: linear-gradient(135deg, rgba(0,212,255,.25), rgba(0,100,200,.2));
+  border-color: rgba(0,212,255,.6);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 7px 24px rgba(0,212,255,.2);
+}
+.game-hist-btn:active { transform: translateY(0) scale(.98); }
+
+/* ── HIST BLOCK (compact) ── */
+.game-hist-block {
+  flex-shrink: 0;
+  background: rgba(4,8,15,.5);
+}
+
+.game-hist-header {
+  font-family: 'Orbitron', monospace;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--muted2);
+  padding: 8px 14px 6px;
+  border-bottom: 1px solid rgba(0,212,255,.08);
+  background: rgba(0,0,0,.2);
+  text-transform: uppercase;
+}
+
+/* Compact history rows */
+.hub-hist-panel {
+  padding: 5px 8px !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.hub-hist-row {
+  display: grid !important;
+  grid-template-columns: 58px 1fr auto !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px 8px !important;
+  border-radius: 8px !important;
+  margin-bottom: 4px !important;
+  font-size: 11px !important;
+}
+.hub-hist-phien { font-size: 9px !important; }
+.hub-hist-dice { font-size: 13px !important; letter-spacing: 1px !important; }
+.hub-kq-emoji { font-size: 14px !important; line-height: 1 !important; }
+.hub-kq-label { font-size: 11px !important; }
+.hub-kq-tong { font-size: 9px !important; }
+.hub-hist-empty { padding: 16px 20px !important; font-size: 12px !important; }
+
+/* ── PRED PANEL TRONG BLOCK ── */
+#page-game .pred-panel-inline {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+#page-game .pred-body {
+  max-height: none !important;
+  overflow-y: visible !important;
+}
+
+/* Ẩn cũ game-hub-layout nếu vẫn còn */
+.game-hub-layout { display: none !important; }
+.hub-left, .hub-right { display: none !important; }
+
+/* game-frame-topbar vẫn flex-shrink:0 */
+.game-frame-topbar {
+  flex-shrink: 0 !important;
+}
+
+/* ── FIX: lobby-float-btn hidden trong layout mới ── */
+#page-game .lobby-float-btn { display: none !important; }
