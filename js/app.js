@@ -298,6 +298,8 @@ function updateLobbyAccBadge(app) {
 function openGame(app) {
   window._curApp    = app;
   window._curApiIdx = 0;
+  // Thông báo cho TTS biết sảnh đang xem để tránh đọc nhầm sảnh
+  if (window.TxTTS) try { window.TxTTS.setApp(app); } catch(e) {}
 
   if (!window._histData[app]) {
     window._histData[app] = {};
@@ -789,7 +791,7 @@ async function supaStartGameRealtime(app, api) {
     // TTS đọc dự đoán realtime
     if (window.TxTTS && row.du_doan && row.phien) {
       const nextP = parseInt(row.phien) + 1;
-      try { window.TxTTS.announcePredict(nextP, row.du_doan); } catch(e) {}
+      try { window.TxTTS.announcePredict(nextP, row.du_doan, app); } catch(e) {}
     }
     supaRenderCloudPred(row, app, api);
   });
@@ -934,7 +936,7 @@ function renderPred(app, api, verdict) {
     // Sound feedback
     if (window.TxSound) { try { verdict.ok ? window.TxSound.play.success() : window.TxSound.play.error(); } catch(e) {} }
     // TTS đọc kết quả đúng/sai
-    if (window.TxTTS) { try { window.TxTTS.announceVerdict(verdict.ok, verdict.pred, verdict.actual); } catch(e) {} }
+    if (window.TxTTS) { try { window.TxTTS.announceVerdict(verdict.ok, verdict.pred, verdict.actual, app); } catch(e) {} }
     // Hiện chúc mừng trong lịch sử nếu đúng
     if (verdict.ok) {
       const cc = document.getElementById("hist-chuc-mung");
@@ -958,7 +960,7 @@ function renderPred(app, api, verdict) {
   window._pendingPred[app][api.label] = { pred: best, pendingPhien: curPhien };
   // TTS đọc dự đoán mới
   if (window.TxTTS) {
-    try { window.TxTTS.announcePredict(nextPhien, best); } catch(e) {}
+    try { window.TxTTS.announcePredict(nextPhien, best, app); } catch(e) {}
   }
   const cl          = RCL[best] || "";
   const acc         = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "N/A";

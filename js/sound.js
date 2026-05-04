@@ -292,7 +292,21 @@ window.TxTTS = (function() {
   let _on = localStorage.getItem(KEY_TTS) !== "false";
   let _synth = window.speechSynthesis;
   let _voiceVI = null;
-  let _lastSpoken = ""; // tránh đọc trùng
+  let _lastSpokenKey = ""; // key = "app|text" để tránh đọc trùng CÙNG sảnh
+  let _currentApp = null;  // sảnh đang xem — được set từ app.js
+
+  // Tên hiển thị của từng sảnh
+  const APP_NAMES = {
+    sunwin:   "Sunwin",
+    xocdia88: "Xóc Đĩa 88",
+    hitclub:  "Hit Club",
+    lc79:     "LC 79",
+    betvip:   "Bet Vip",
+  };
+
+  function getAppName(app) {
+    return APP_NAMES[app] || (app ? app : "");
+  }
 
   // Load voice tiếng Việt
   function loadVoice() {
@@ -309,10 +323,20 @@ window.TxTTS = (function() {
     if (_synth.onvoiceschanged !== undefined) _synth.onvoiceschanged = tryLoad;
   }
 
-  function speak(text) {
+  // Đặt sảnh hiện tại (gọi từ app.js khi user mở sảnh)
+  function setApp(app) {
+    if (_currentApp !== app) {
+      _currentApp = app;
+      _lastSpokenKey = ""; // reset khi đổi sảnh, tránh bỏ qua câu đầu tiên
+    }
+  }
+
+  function speak(text, app) {
     if (!_on || !_synth) return;
-    if (text === _lastSpoken) return; // tránh đọc lại
-    _lastSpoken = text;
+    const appKey = app || _currentApp || "";
+    const key = appKey + "|" + text;
+    if (key === _lastSpokenKey) return; // tránh đọc lại ĐÚNG SẢN này với ĐÚNG câu này
+    _lastSpokenKey = key;
     // Cancel giọng đang đọc
     try { _synth.cancel(); } catch(e) {}
     const utter = new SpeechSynthesisUtterance(text);
@@ -324,17 +348,25 @@ window.TxTTS = (function() {
     try { _synth.speak(utter); } catch(e) {}
   }
 
-  // Đọc kết quả dự đoán: "Dự đoán phiên 2628447 sẽ ra Tài"
-  function announcePredict(phien, result) {
+  // Đọc kết quả dự đoán: "Sunwin — Dự đoán phiên 123 sẽ ra Tài"
+  function announcePredict(phien, result, app) {
     if (!phien || !result) return;
-    const text = `Dự đoán phiên ${phien} sẽ ra ${result}`;
-    speak(text);
+    // Chỉ đọc nếu đang xem đúng sảnh này
+    const targetApp = app || _currentApp;
+    if (window._curApp && targetApp && window._curApp !== targetApp) return;
+    const appName = getAppName(targetApp);
+    const prefix = appName ? appName + " — " : "";
+    const text = `${prefix}Dự đoán phiên ${phien} sẽ ra ${result}`;
+    speak(text, targetApp);
   }
 
   // Đọc kết quả đúng/sai
-  function announceVerdict(ok, pred, actual) {
-    if (ok) speak(`Chính xác! Bot đoán đúng ${pred}`);
-    else speak(`Sai rồi! Bot đoán ${pred}, kết quả thực tế là ${actual}`);
+  function announceVerdict(ok, pred, actual, app) {
+    // Chỉ đọc nếu đang xem đúng sảnh này
+    const targetApp = app || _currentApp;
+    if (window._curApp && targetApp && window._curApp !== targetApp) return;
+    if (ok) speak(`Chính xác! Bot đoán đúng ${pred}`, targetApp);
+    else speak(`Sai rồi! Bot đoán ${pred}, kết quả thực tế là ${actual}`, targetApp);
   }
 
   function toggle() {
@@ -350,5 +382,5 @@ window.TxTTS = (function() {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", loadVoice);
   else loadVoice();
 
-  return { speak, announcePredict, announceVerdict, toggle, isOn };
+  return { speak, announcePredict, announceVerdict, toggle, isOn, setApp, getAppName };
 })();
