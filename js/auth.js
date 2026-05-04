@@ -304,12 +304,17 @@ function showAuthErr(msg) {
 async function animateLogin() {
   return new Promise(res => {
     document.getElementById("login-btn").innerHTML = `✅ Thành công!`;
+    // Play login success sound — resume AudioContext bằng gesture này
+    if (window.TxSound) {
+      try { window.TxSound.getCtx(); window.TxSound.play.login(); } catch(e) {}
+    }
     setTimeout(res, 700);
   });
 }
 
 function doLogout(expired = false) {
   stopExpireCountdown();
+  if (window.TxSound) { try { window.TxSound.play.close(); } catch(e) {} }
   if (window._fetchTimer) { clearInterval(window._fetchTimer); window._fetchTimer = null; }
   const iframe = document.getElementById("game-iframe");
   if (iframe) iframe.src = "about:blank";

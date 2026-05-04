@@ -88,6 +88,8 @@ function launchApp() {
     }
 
     showHome();
+    // Khởi động nhạc nền sau khi đăng nhập
+    if (window.TxSound) { setTimeout(() => window.TxSound.startMusic(), 600); }
     // Preload stats tất cả sảnh → hiện badge % ngay lập tức
     preloadAllStats().then(() => buildLobbies());
   } catch(err) {
@@ -262,7 +264,7 @@ async function buildLobbies() {
         <div class="lobby-name">${app.toUpperCase()}</div>
         <div class="lobby-enter" style="color:${isMaint ? "#ff6b35" : col}">${isMaint ? "🔧 Đang bảo trì" : "Vào sảnh →"}</div>
       </div>`;
-    c.onclick = () => isMaint ? showToast("🔧 Chức năng này đang được bảo trì!", "warn") : openWebview(app);
+    c.onclick = () => isMaint ? showToast("🔧 Chức năng này đang được bảo trì!", "warn") : openGame(app);
     g.appendChild(c);
     setTimeout(() => c.classList.add("visible"), 50 * Object.keys(APIS).indexOf(app));
   });
@@ -315,7 +317,8 @@ function openGame(app) {
   document.getElementById("game-brand-tag").textContent = `${em} ${app.toUpperCase()}`;
   document.getElementById("topbar-center").innerHTML    = `<span class="topbar-brand">${em} ${app.toUpperCase()}</span>`;
   buildApiTabs();
-  loadIframe(app);
+  // Mở popup window tài xỉu ngay, không dùng iframe
+  openLobbyWindowFor(app);
   openPred();
   closeSidebar();
   doFetch();
@@ -418,6 +421,51 @@ function closeWebview() {
 
 function openWebviewExternal() {
   if (window._webviewUrl) window.open(window._webviewUrl, "_blank");
+}
+
+// ── MỞ POPUP WINDOW SẢN TRỰC TIẾP ────────────────────────
+function openLobbyWindowFor(app) {
+  const url = LOBBY_URLS[app];
+  if (!url) return;
+  window._curLobbyUrl = url;
+  window._curApp = app;
+
+  // Kích thước popup thông minh
+  const sw = window.screen.width, sh = window.screen.height;
+  const pw = Math.min(500, Math.round(sw * 0.45));
+  const ph = Math.min(900, Math.round(sh * 0.92));
+  const px = Math.round(sw * 0.54);
+  const py = Math.round((sh - ph) / 2);
+  const features = `width=${pw},height=${ph},left=${px},top=${py},resizable=yes,scrollbars=yes`;
+
+  if (window._lobbyWin && !window._lobbyWin.closed) {
+    window._lobbyWin.location.href = url;
+    window._lobbyWin.focus();
+  } else {
+    window._lobbyWin = window.open(url, "lobby_win", features);
+  }
+
+  // Hiện float button
+  const floatBtn = document.getElementById("lobby-float-btn");
+  if (floatBtn) floatBtn.classList.remove("hidden");
+
+  // Theo dõi popup đóng
+  clearInterval(window._lobbyWinTracker);
+  window._lobbyWinTracker = setInterval(() => {
+    if (!window._lobbyWin || window._lobbyWin.closed) {
+      clearInterval(window._lobbyWinTracker);
+      window._lobbyWin = null;
+      // Không ẩn float — để user mở lại dễ
+    }
+  }, 1000);
+}
+
+function refocusLobbyWindow() {
+  if (window._lobbyWin && !window._lobbyWin.closed) {
+    window._lobbyWin.focus();
+  } else if (window._curApp && LOBBY_URLS[window._curApp]) {
+    openLobbyWindowFor(window._curApp);
+  }
 }
 
 function openLobbyPopup() {
@@ -712,6 +760,7 @@ async function supaStartGameRealtime(app, api) {
 
     renderHistBar(app, api);
     showToast(`🤖 AI KING DZI — Phiên mới: #${row.phien} — ${actualKq || ""}`, "info");
+    if (window.TxSound) { try { window.TxSound.play.dice(); } catch(e) {} }
   });
 
   await supaSubscribePredictions(app, api.label, row => {
@@ -805,6 +854,45 @@ function renderHistBar(app, api) {
     </div>
     <div class="hist-chuc-mung" id="hist-chuc-mung"></div>
   `;
+  // Cập nhật cột phải hub
+  if (app && api) renderHubHist(app, api);
+}
+
+// ── RENDER HUB HISTORY PANEL (cột phải) ───────────────────
+function renderHubHist(app, api) {
+  const panel = document.getElementById("hub-hist-panel");
+  if (!panel) return;
+  const isXD = api.type === "xocdia";
+  const hist = window._histData[app]?.[api.label] || [];
+  if (!hist.length) {
+    panel.innerHTML = `<div class="hub-hist-empty">⏳ Đang chờ dữ liệu từ sảnh...</div>`;
+    return;
+  }
+  const recent = [...hist].reverse().slice(0, 30);
+  const FACE = { 1:"⚀", 2:"⚁", 3:"⚂", 4:"⚃", 5:"⚄", 6:"⚅" };
+  let html = "";
+  recent.forEach(r => {
+    const kq = isXD ? (r.ket_qua_truyen_thong || r.ket_qua) : r.ket_qua;
+    const cl = RCL[kq] || "";
+    const emoji = RE[kq] || "⬜";
+    const d1 = FACE[r.xuc_xac_1] || "🎲";
+    const d2 = FACE[r.xuc_xac_2] || "🎲";
+    const d3 = FACE[r.xuc_xac_3] || "🎲";
+    const tong = r.tong ? `Tổng: ${r.tong}` : "";
+    const detail = r.ket_qua_chi_tiet || "";
+    html += `
+    <div class="hub-hist-row ${cl}">
+      <div class="hub-hist-phien">#${r.phien}</div>
+      <div class="hub-hist-dice">${d1}${d2}${d3}</div>
+      <div class="hub-hist-kq">
+        <span class="hub-kq-emoji">${emoji}</span>
+        <span class="hub-kq-label">${kq || "?"}</span>
+        ${tong ? `<span class="hub-kq-tong">${tong}</span>` : ""}
+        ${detail ? `<span class="hub-kq-detail">${detail}</span>` : ""}
+      </div>
+    </div>`;
+  });
+  panel.innerHTML = html;
 }
 
 // ── RENDER PREDICTION ──────────────────────────────────────
@@ -825,6 +913,8 @@ function renderPred(app, api, verdict) {
       ? `ĐÚNG! Đoán: ${verdict.pred}`
       : `SAI. Đoán ${verdict.pred} → ${verdict.actual}`;
     verdictHtml = `<div class="verdict-pill ${cls}">${icon} ${msg}</div>`;
+    // Sound feedback
+    if (window.TxSound) { try { verdict.ok ? window.TxSound.play.success() : window.TxSound.play.error(); } catch(e) {} }
     // Hiện chúc mừng trong lịch sử nếu đúng
     if (verdict.ok) {
       const cc = document.getElementById("hist-chuc-mung");
