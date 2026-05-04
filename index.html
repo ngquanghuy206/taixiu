@@ -38,44 +38,86 @@
 
 <!-- ── AUTH SCREEN ─────────────────────────────────── -->
 <div id="auth-screen">
+  <!-- 3D Animated Background -->
+  <canvas id="auth-canvas" class="auth-canvas"></canvas>
+  <div class="auth-orbs">
+    <div class="auth-orb orb1"></div>
+    <div class="auth-orb orb2"></div>
+    <div class="auth-orb orb3"></div>
+  </div>
   <div class="auth-bg-grid"></div>
-  <div class="auth-box">
-    <div class="auth-corner tl"></div>
-    <div class="auth-corner tr"></div>
-    <div class="auth-corner bl"></div>
-    <div class="auth-corner br"></div>
-    <div class="auth-logo-img-wrap">
-      <img src="https://i.imgur.com/PvqTmpY.jpeg" class="auth-logo-img" onerror="this.style.display='none'"/>
-    </div>
-    <div class="auth-logo">TX · AI</div>
-    <div class="auth-sub">Tool Dự Đoán · By Nguyễn Quang Huy Dzi</div>
-    <input id="inp-user" class="auth-field" type="text" placeholder="Tài khoản" autocomplete="off"/>
-    <input id="inp-pass" class="auth-field" type="password" placeholder="Mật khẩu"/>
-    <label class="auth-remember">
-      <input type="checkbox" id="chk-remember"/>
-      <span>Lưu đăng nhập</span>
-    </label>
-    <div class="captcha-wrap">
-      <div class="captcha-question-row">
-        <span class="captcha-question" id="captcha-question"></span>
-        <span class="captcha-eq">=  ?</span>
-        <button class="captcha-refresh" onclick="refreshCaptcha()" title="Câu khác">🔄</button>
+
+  <!-- Scrollable wrapper -->
+  <div class="auth-scroll-wrap">
+    <!-- 3D Card -->
+    <div class="auth-box" id="auth-box">
+      <div class="auth-corner tl"></div>
+      <div class="auth-corner tr"></div>
+      <div class="auth-corner bl"></div>
+      <div class="auth-corner br"></div>
+
+      <!-- Shine sweep effect -->
+      <div class="auth-shine"></div>
+
+      <!-- Logo -->
+      <div class="auth-logo-img-wrap">
+        <div class="auth-logo-ring"></div>
+        <img src="https://i.imgur.com/PvqTmpY.jpeg" class="auth-logo-img" onerror="this.style.display='none'"/>
       </div>
-      <div class="captcha-btns" id="captcha-btns"></div>
-    </div>
-    <div class="captcha-err" id="captcha-err"></div>
-    <button class="auth-btn" id="login-btn" onclick="doLogin()">ĐĂNG NHẬP</button>
-    <div class="auth-err" id="auth-err"></div>
-    <div class="auth-contact-notice">
-      <div class="auth-notice-title">💡 Chưa có tài khoản? Liên hệ Admin</div>
-      <div class="auth-contact-btns">
-        <a href="https://zalo.me/0993389813" target="_blank" class="auth-sup-btn auth-zalo">💬 Zalo</a>
-        <a href="https://discord.gg/cq2MD24GK" target="_blank" class="auth-sup-btn auth-discord">🎮 Discord</a>
-        <a href="https://t.me/knamknam06" target="_blank" class="auth-sup-btn auth-tele">✈️ Telegram</a>
-        <a href="https://www.facebook.com/share/1AtHiLreS1/" target="_blank" class="auth-sup-btn auth-fb">📘 Facebook</a>
+      <div class="auth-logo">TX · AI</div>
+      <div class="auth-brand-badges">
+        <span class="auth-badge">🤖 AI KING DZI</span>
+        <span class="auth-badge-sep">·</span>
+        <span class="auth-badge">⚡ REAL-TIME</span>
       </div>
+      <div class="auth-sub">Tool Dự Đoán · By Nguyễn Quang Huy Dzi</div>
+
+      <!-- Animated divider -->
+      <div class="auth-divider"><span></span></div>
+
+      <!-- Fields -->
+      <div class="auth-field-wrap">
+        <span class="auth-field-icon">👤</span>
+        <input id="inp-user" class="auth-field" type="text" placeholder="Tài khoản" autocomplete="off"/>
+      </div>
+      <div class="auth-field-wrap">
+        <span class="auth-field-icon">🔑</span>
+        <input id="inp-pass" class="auth-field" type="password" placeholder="Mật khẩu"/>
+      </div>
+
+      <label class="auth-remember">
+        <input type="checkbox" id="chk-remember"/>
+        <span>Lưu đăng nhập</span>
+      </label>
+
+      <div class="captcha-wrap">
+        <div class="captcha-question-row">
+          <span class="captcha-question" id="captcha-question"></span>
+          <span class="captcha-eq">=  ?</span>
+          <button class="captcha-refresh" onclick="refreshCaptcha()" title="Câu khác">🔄</button>
+        </div>
+        <div class="captcha-btns" id="captcha-btns"></div>
+      </div>
+      <div class="captcha-err" id="captcha-err"></div>
+
+      <button class="auth-btn" id="login-btn" onclick="doLogin()">
+        <span class="auth-btn-glow"></span>
+        <span class="auth-btn-text">ĐĂNG NHẬP</span>
+      </button>
+      <div class="auth-err" id="auth-err"></div>
+
+      <!-- Contact -->
+      <div class="auth-contact-notice">
+        <div class="auth-notice-title">💡 Chưa có tài khoản? Liên hệ Admin</div>
+        <div class="auth-contact-btns">
+          <a href="https://zalo.me/0993389813" target="_blank" class="auth-sup-btn auth-zalo">💬 Zalo</a>
+          <a href="https://discord.gg/cq2MD24GK" target="_blank" class="auth-sup-btn auth-discord">🎮 Discord</a>
+          <a href="https://t.me/knamknam06" target="_blank" class="auth-sup-btn auth-tele">✈️ Telegram</a>
+          <a href="https://www.facebook.com/share/1AtHiLreS1/" target="_blank" class="auth-sup-btn auth-fb">📘 Facebook</a>
+        </div>
+      </div>
+      <div class="auth-copy">© Bản quyền thuộc về Nguyễn Quang Huy Dzi</div>
     </div>
-    <div class="auth-copy">© Bản quyền thuộc về Nguyễn Quang Huy Dzi</div>
   </div>
 </div>
 
@@ -135,70 +177,52 @@
           <div class="api-tabs" id="api-tabs"></div>
         </div>
 
-        <!-- iframe area -->
-        <div class="iframe-container">
-          <!-- Blocker nếu web không cho nhúng -->
-          <div class="iframe-blocker hidden" id="iframe-blocker">
-            <div class="iframe-msg">
-              <div class="popup-hero">🎮</div>
-              <div class="iframe-msg-title">Mở Sảnh Dạng Cửa Sổ Nổi</div>
-              <div class="iframe-msg-sub">Sảnh này không cho nhúng trực tiếp.<br/>Chọn cách mở bên dưới để chơi và xem AI cùng lúc.</div>
+        <!-- GAME HUB LAYOUT — 2 cột: AI Panel + History Panel -->
+        <div class="game-hub-layout">
 
-              <div class="popup-btns-row">
-                <button class="popup-btn-card popup-btn-primary" onclick="openLobbyPopup()">
-                  <span class="popup-btn-card-icon">🪟</span>
-                  <div class="popup-btn-card-title">Cửa Sổ Nổi</div>
-                  <div class="popup-btn-card-sub">Xem AI cùng lúc</div>
-                </button>
-                <button class="popup-btn-card popup-btn-secondary" onclick="openLobbyTab()">
-                  <span class="popup-btn-card-icon">🚀</span>
-                  <div class="popup-btn-card-title">Tab Mới</div>
-                  <div class="popup-btn-card-sub">Mở trong tab riêng</div>
-                </button>
+          <!-- CỘT TRÁI: AI PREDICTION (đây là pred-panel cũ, giờ in-flow) -->
+          <div class="hub-left">
+            <div class="hub-section-label">🤖 AI KING DZI — DỰ ĐOÁN</div>
+            <div class="pred-panel-inline" id="pred-panel">
+              <div class="pred-head" id="pred-head">
+                <div class="pred-head-title">
+                  <span class="pred-head-dot"></span>🧠 DỰ ĐOÁN AI
+                </div>
+                <div class="pred-head-actions">
+                  <button class="pred-toggle-btn" id="pred-toggle-btn" onclick="togglePredCollapse()" title="Thu gọn">▾</button>
+                </div>
               </div>
-
-              <div class="popup-tip">
-                <span class="popup-tip-icon">💡</span>
-                <span>Sau khi mở cửa sổ nổi, quay lại Tool AI để xem dự đoán — sảnh vẫn chạy nền</span>
+              <div class="pred-body" id="pred-body">
+                <div class="pred-loading">
+                  <div class="loading-orbit"><div class="orbit-ring"></div><div class="orbit-dot"></div></div>
+                  <span>Đang phân tích...</span>
+                </div>
               </div>
-              <div class="iframe-msg-url" id="iframe-msg-url"></div>
+              <div class="pred-hist hidden" id="pred-hist">
+                <div class="pred-hist-label">Lịch sử 14 phiên</div>
+                <div class="pred-hist-bar" id="pred-hist-bar"></div>
+              </div>
             </div>
           </div>
-          <iframe id="game-iframe" src="about:blank"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-top-navigation-by-user-activation allow-downloads allow-modals"
-            referrerpolicy="no-referrer" allowfullscreen></iframe>
+
+          <!-- CỘT PHẢI: LỊCH SỬ KẾT QUẢ THỰC TẾ -->
+          <div class="hub-right">
+            <div class="hub-section-label">📋 KẾT QUẢ THỰC TẾ</div>
+            <div class="hub-hist-panel" id="hub-hist-panel">
+              <div class="hub-hist-empty">⏳ Đang chờ dữ liệu từ sảnh...</div>
+            </div>
+          </div>
+
         </div>
 
-        <!-- FLOATING LOBBY BUTTON -->
-        <button class="lobby-float-btn hidden" id="lobby-float-btn" onclick="refocusPopup()">
-          🎮 Sảnh Game
+        <!-- FLOATING LOBBY BUTTON — luôn hiện khi trong game -->
+        <button class="lobby-float-btn" id="lobby-float-btn" onclick="refocusLobbyWindow()">
+          🎮 Vào Sảnh
         </button>
 
         <!-- CALC ANIMATION OVERLAY -->
         <div id="calc-overlay" class="hidden"></div>
-
-        <!-- PREDICTION PANEL (draggable) -->
-        <div class="pred-panel" id="pred-panel">
-          <div class="pred-head" id="pred-head">
-            <div class="pred-head-title">
-              <span class="pred-head-dot"></span>🧠 DỰ ĐOÁN AI
-            </div>
-            <div class="pred-head-actions">
-              <button class="pred-toggle-btn" id="pred-toggle-btn" onclick="togglePredCollapse()" title="Thu gọn">▾</button>
-              <button class="pred-close" onclick="closePred()" title="Đóng">✕</button>
-            </div>
-          </div>
-          <div class="pred-body" id="pred-body">
-            <div class="pred-loading">
-              <div class="loading-orbit"><div class="orbit-ring"></div><div class="orbit-dot"></div></div>
-              <span>Đang phân tích...</span>
-            </div>
-          </div>
-          <div class="pred-hist hidden" id="pred-hist">
-            <div class="pred-hist-label">Lịch sử 14 phiên</div>
-            <div class="pred-hist-bar" id="pred-hist-bar"></div>
-          </div>
-        </div>
+        <!-- pred-reopen placeholder (hidden, not used in new layout) -->
         <button class="pred-reopen hidden" id="pred-reopen" onclick="openPred()">🧠 Dự Đoán</button>
       </div>
 
@@ -376,6 +400,7 @@
 <script src="js/supabase_rt.js"></script>
 <script src="js/app.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/sound.js"></script>
 <script>
   // Enter to login
   document.getElementById("inp-pass").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
@@ -390,6 +415,102 @@
       document.getElementById("chk-remember").checked = true;
     }
   })();
+</script>
+
+<!-- ── AUTH 3D EFFECTS ───────────────────────────────── -->
+<script>
+(function() {
+  /* === PARTICLE CANVAS === */
+  function initAuthCanvas() {
+    var canvas = document.getElementById('auth-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var W, H, particles = [], lines = [], animId;
+
+    function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+    resize();
+    window.addEventListener('resize', resize);
+
+    for (var i = 0; i < 80; i++) {
+      particles.push({ x: Math.random()*2000, y: Math.random()*2000, z: Math.random()*1000+200,
+        r: Math.random()*1.5+0.3, vz: -(Math.random()*1.2+0.3),
+        col: Math.random()>.5?'0,212,255':'123,104,238', opacity: Math.random()*.6+.2 });
+    }
+    for (var j = 0; j < 10; j++) {
+      lines.push({ x1: Math.random()*2, y1: Math.random()*2, x2: Math.random()*2, y2: Math.random()*2,
+        t: Math.random()*Math.PI*2, speed: Math.random()*.005+.002,
+        col: Math.random()>.5?'0,212,255':'123,104,238' });
+    }
+
+    function draw() {
+      ctx.clearRect(0,0,W,H);
+      var cx=W/2, cy=H/2, fov=400;
+      particles.forEach(function(p) {
+        p.z += p.vz;
+        if (p.z<=1) p.z=1000;
+        var scale=fov/p.z, sx=(p.x-1000)*scale+cx, sy=(p.y-1000)*scale+cy;
+        if (sx<-20||sx>W+20||sy<-20||sy>H+20) return;
+        var size=p.r*scale*2, alpha=p.opacity*Math.min(1,(1000-p.z)/400);
+        ctx.beginPath(); ctx.arc(sx,sy,Math.max(0.2,size),0,Math.PI*2);
+        ctx.fillStyle='rgba('+p.col+','+alpha+')'; ctx.fill();
+      });
+      lines.forEach(function(l) {
+        l.t+=l.speed;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(l.t)*W*l.x1, Math.sin(l.t*.7)*H*l.y1);
+        ctx.lineTo(Math.sin(l.t*.8)*W*l.x2, Math.cos(l.t*.6)*H*l.y2);
+        ctx.strokeStyle='rgba('+l.col+',.03)'; ctx.lineWidth=1; ctx.stroke();
+      });
+      animId = requestAnimationFrame(draw);
+    }
+    draw();
+  }
+
+  /* === 3D CARD TILT === */
+  function initCardTilt() {
+    var box = document.getElementById('auth-box');
+    if (!box) return;
+    var raf, MAX=10;
+    function applyTilt(cx, cy) {
+      var rect=box.getBoundingClientRect();
+      var dx=(cx-rect.left-rect.width/2)/(window.innerWidth/2);
+      var dy=(cy-rect.top-rect.height/2)/(window.innerHeight/2);
+      cancelAnimationFrame(raf);
+      raf=requestAnimationFrame(function(){
+        box.style.transform='perspective(900px) rotateX('+(-dy*MAX)+'deg) rotateY('+(dx*MAX)+'deg) translateZ(10px)';
+      });
+    }
+    function resetTilt() {
+      cancelAnimationFrame(raf);
+      box.style.transition='transform .5s cubic-bezier(.25,.46,.45,.94)';
+      box.style.transform='perspective(900px) rotateX(0) rotateY(0) translateZ(0)';
+      setTimeout(function(){box.style.transition='transform .1s ease-out,box-shadow .3s';},520);
+    }
+    window.addEventListener('mousemove', function(e){ applyTilt(e.clientX,e.clientY); });
+    window.addEventListener('mouseleave', resetTilt);
+    window.addEventListener('touchmove', function(e){
+      if(e.touches.length) applyTilt(e.touches[0].clientX,e.touches[0].clientY);
+    },{passive:true});
+    window.addEventListener('touchend', resetTilt);
+  }
+
+  /* === BUTTON RIPPLE === */
+  function initBtnRipple() {
+    var btn = document.getElementById('login-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function(e) {
+      var rect=btn.getBoundingClientRect();
+      var rpl=document.createElement('span');
+      rpl.style.cssText='position:absolute;border-radius:50%;width:6px;height:6px;background:rgba(255,255,255,.5);transform:scale(0);left:'+(e.clientX-rect.left-3)+'px;top:'+(e.clientY-rect.top-3)+'px;animation:rippleOut .6s linear forwards;pointer-events:none;z-index:2;';
+      btn.appendChild(rpl);
+      setTimeout(function(){rpl.remove();},700);
+    });
+  }
+
+  function init() { initAuthCanvas(); initCardTilt(); initBtnRipple(); }
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
+  else init();
+})();
 </script>
 
 <!-- ── WEBVIEW MODAL ─────────────────────────────────── -->
