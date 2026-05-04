@@ -1600,9 +1600,8 @@ body::after{
    NEW GAME PAGE LAYOUT — Dọc, Full Scroll
    ═══════════════════════════════════════════════════ */
 
-/* page-game: flex column, overflow scroll */
+/* page-game: flex column, overflow scroll - NO display override */
 #page-game {
-  display: flex !important;
   flex-direction: column !important;
   flex: 1 !important;
   overflow: hidden !important;
