@@ -304,9 +304,14 @@ function showAuthErr(msg) {
 async function animateLogin() {
   return new Promise(res => {
     document.getElementById("login-btn").innerHTML = `✅ Thành công!`;
-    // Play login success sound — resume AudioContext bằng gesture này
+    // Play login success sound — resume AudioContext bằng gesture này (click = user gesture)
     if (window.TxSound) {
-      try { window.TxSound.getCtx(); window.TxSound.play.login(); } catch(e) {}
+      try {
+        const ctx = window.TxSound.getCtx();
+        // Resume AudioContext trong gesture window
+        if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+        window.TxSound.play.login();
+      } catch(e) {}
     }
     setTimeout(res, 700);
   });

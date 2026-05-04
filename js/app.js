@@ -88,8 +88,10 @@ function launchApp() {
     }
 
     showHome();
-    // Khởi động nhạc nền sau khi đăng nhập
-    if (window.TxSound) { setTimeout(() => window.TxSound.startMusic(), 600); }
+    // Khởi động nhạc nền — gọi ngay (vẫn trong context của login gesture)
+    if (window.TxSound) {
+      try { window.TxSound.startMusic(); } catch(e) {}
+    }
     // Preload stats tất cả sảnh → hiện badge % ngay lập tức
     preloadAllStats().then(() => buildLobbies());
   } catch(err) {
@@ -319,8 +321,9 @@ function openGame(app) {
   document.getElementById("game-brand-tag").textContent = `${em} ${app.toUpperCase()}`;
   document.getElementById("topbar-center").innerHTML    = `<span class="topbar-brand">${em} ${app.toUpperCase()}</span>`;
   buildApiTabs();
-  // Mở popup window tài xỉu ngay, không dùng iframe
-  openLobbyWindowFor(app);
+  // KHÔNG tự mở sảnh — user bấm nút "Vào Sảnh Game" mới mở
+  // Cập nhật tên nút sảnh
+  updateLobbyBtnLabel(app);
   openPred();
   closeSidebar();
   doFetch();
@@ -460,6 +463,14 @@ function openLobbyWindowFor(app) {
       // Không ẩn float — để user mở lại dễ
     }
   }, 1000);
+}
+
+function updateLobbyBtnLabel(app) {
+  const btn = document.querySelector(".game-lobby-btn");
+  if (!btn) return;
+  const em   = (typeof BRAND_EMOJI !== "undefined" && BRAND_EMOJI[app]) || "🎮";
+  const name = app ? app.toUpperCase() : "SẢNH";
+  btn.innerHTML = `${em} <span>Vào ${name}</span>`;
 }
 
 function refocusLobbyWindow() {
@@ -1181,4 +1192,15 @@ function openHistModal(app, label, type) {
 
 function closeHistModal() {
   document.getElementById("hist-modal-overlay").classList.add("hidden");
+}
+
+// ── TRIGGER HIST MODAL (từ button trên đầu pred block) ──────
+function triggerHistModal() {
+  const app = window._curApp;
+  if (!app) return;
+  const apis = (typeof APIS !== "undefined") ? APIS[app] : null;
+  if (!apis || !apis.length) return;
+  const api = apis[window._curApiIdx || 0];
+  if (!api) return;
+  openHistModal(app, api.label, api.type);
 }

@@ -86,15 +86,38 @@ window.TxSound = (function () {
     wrap.appendChild(inner); document.body.appendChild(wrap);
     _player = new YT.Player("yt-player-inner", {
       videoId: YT_VIDEO_ID,
-      playerVars: { autoplay:1, loop:1, playlist:YT_VIDEO_ID, controls:0, disablekb:1, fs:0, iv_load_policy:3, rel:0, modestbranding:1, origin:location.origin },
+      playerVars: { autoplay:1, loop:1, playlist:YT_VIDEO_ID, controls:0, disablekb:1, fs:0, iv_load_policy:3, rel:0, modestbranding:1, mute:0, origin:location.origin },
       events: {
         onReady: function(e) {
           e.target.setVolume(55);
-          _musicOn ? e.target.playVideo() : e.target.pauseVideo();
+          if (_musicOn) {
+            // Thử play, nếu bị block bởi autoplay policy thì unmute sau gesture
+            try {
+              e.target.playVideo();
+              // iOS workaround: mute trước, play, rồi unmute ngay
+              e.target.unMute();
+            } catch(err) {}
+            // Retry sau 1s nếu vẫn paused
+            setTimeout(() => {
+              try {
+                if (e.target.getPlayerState && e.target.getPlayerState() !== 1) {
+                  e.target.playVideo();
+                }
+              } catch(err2) {}
+            }, 1000);
+          } else {
+            try { e.target.pauseVideo(); } catch(err) {}
+          }
           updateSidebarBtns();
         },
         onStateChange: function(e) {
           if (e.data === YT.PlayerState.ENDED) { try { _player.seekTo(0); _player.playVideo(); } catch(err) {} }
+          // Nếu bị pause không mong muốn và _musicOn = true, retry
+          if (e.data === YT.PlayerState.PAUSED && _musicOn) {
+            setTimeout(() => {
+              try { if (_player && _musicOn) _player.playVideo(); } catch(err) {}
+            }, 500);
+          }
         },
         onError: function() { setTimeout(() => { if (_started && _musicOn) createPlayer(); }, 5000); }
       }
@@ -173,14 +196,61 @@ window.TxSound = (function () {
   function startMusic() {
     if (_started) return;
     _started = true;
-    loadYTScript();
-    if (_ytReady) createPlayer();
+    // Resume AudioContext ngay (đang trong user gesture từ login click)
+    const ctx = getCtx();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().then(() => {
+        // AudioContext đã unlock, load YouTube
+        loadYTScript();
+        if (_ytReady) createPlayer();
+      }).catch(() => {
+        loadYTScript();
+        if (_ytReady) createPlayer();
+      });
+    } else {
+      loadYTScript();
+      if (_ytReady) createPlayer();
+    }
     // Inject sidebar buttons sau khi DOM app ready
     setTimeout(injectSidebarBtns, 800);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wireGlobalSounds);
   else wireGlobalSounds();
+
+  // Resume nhạc khi quay lại tab / mở lại Safari
+  document.addEventListener("visibilitychange", function() {
+    if (document.visibilityState === "visible" && _started && _musicOn) {
+      // Resume AudioContext nếu bị suspend
+      const ctx = getCtx();
+      if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+      // Resume YouTube player
+      setTimeout(() => {
+        try {
+          if (_player && _musicOn) {
+            const state = _player.getPlayerState ? _player.getPlayerState() : -1;
+            if (state !== 1) _player.playVideo();
+          }
+        } catch(e) {}
+      }, 300);
+    }
+  });
+
+  // iOS Safari: pageshow khi swipe back từ tab khác
+  window.addEventListener("pageshow", function(e) {
+    if (_started && _musicOn) {
+      setTimeout(() => {
+        try {
+          const ctx = getCtx();
+          if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+          if (_player && _musicOn) {
+            const state = _player.getPlayerState ? _player.getPlayerState() : -1;
+            if (state !== 1) _player.playVideo();
+          }
+        } catch(err) {}
+      }, 500);
+    }
+  });
 
   return {
     startMusic,
