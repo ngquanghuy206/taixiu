@@ -14,7 +14,11 @@ window._predOpen    = true;
 
 
 // ── TOPBAR COUNTDOWN (cho user thuê) ──────────────────────
+window._topbarTimer = null;
+
 function startTopbarCountdown(expireAt) {
+  // Clear interval cũ trước khi tạo mới — tránh leak interval mỗi lần login
+  if (window._topbarTimer) { clearInterval(window._topbarTimer); window._topbarTimer = null; }
   const update = () => {
     const left = expireAt - Date.now();
     const el = document.getElementById('topbar-expire');
@@ -31,7 +35,7 @@ function startTopbarCountdown(expireAt) {
     el.style.color = warn ? '#ff6b35' : '#22c55e';
   };
   update();
-  setInterval(update, 1000);
+  window._topbarTimer = setInterval(update, 1000);
 }
 
 // ── LAUNCH APP ─────────────────────────────────────────────
@@ -92,8 +96,12 @@ function launchApp() {
     if (window.TxSound) {
       try { window.TxSound.startMusic(); } catch(e) {}
     }
-    // Preload stats tất cả sảnh → hiện badge % ngay lập tức
-    preloadAllStats().then(() => buildLobbies());
+    // Render lobby ngay — không chờ preloadAllStats
+    buildLobbies();
+    // Preload stats song song → chỉ update badge % sau khi xong, không block UI
+    preloadAllStats().then(() => {
+      Object.keys(APIS).forEach(app => updateLobbyAccBadge(app));
+    });
   } catch(err) {
     console.error("[launchApp] Lỗi:", err);
     // Reset màn hình auth nếu launch thất bại
@@ -240,7 +248,14 @@ async function buildLobbies() {
   const g = document.getElementById("lobby-grid");
   if (!g) return;
   g.innerHTML = "";
-  const maint = await getMaintenance();
+  // Render ngay với maint = {} (không đơ chờ fetch)
+  _renderLobbyCards(g, {});
+  // Fetch maintenance song song → update card sau
+  getMaintenance().then(maint => _renderLobbyCards(g, maint)).catch(() => {});
+}
+
+function _renderLobbyCards(g, maint) {
+  g.innerHTML = "";
   Object.entries(APIS).forEach(([app, apis]) => {
     const em      = BRAND_EMOJI[app] || "🎰";
     const grad    = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";

@@ -319,6 +319,8 @@ async function animateLogin() {
 
 function doLogout(expired = false) {
   stopExpireCountdown();
+  // Clear topbar countdown timer
+  if (window._topbarTimer) { clearInterval(window._topbarTimer); window._topbarTimer = null; }
   if (window.TxSound) { try { window.TxSound.play.close(); } catch(e) {} }
   if (window._fetchTimer) { clearInterval(window._fetchTimer); window._fetchTimer = null; }
   const iframe = document.getElementById("game-iframe");
