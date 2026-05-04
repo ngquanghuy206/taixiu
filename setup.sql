@@ -3,6 +3,29 @@
 -- Chạy file này trong Supabase SQL Editor
 -- =====================================================
 
+-- ── BẢNG QUẢN LÝ TÀI KHOẢN USER ──────────────────────────
+CREATE TABLE IF NOT EXISTS tx_users (
+  username     text PRIMARY KEY,
+  password     text NOT NULL,
+  expires      timestamptz NOT NULL,
+  max_devices  int DEFAULT 1,
+  created_at   timestamptz DEFAULT now()
+);
+
+-- ── BẢNG QUẢN LÝ THIẾT BỊ (IP) ────────────────────────────
+CREATE TABLE IF NOT EXISTS tx_ipmap (
+  username  text PRIMARY KEY,
+  devices   jsonb DEFAULT '[]'::jsonb,
+  updated_at timestamptz DEFAULT now()
+);
+
+-- RLS cho tx_users và tx_ipmap
+ALTER TABLE tx_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tx_ipmap ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "allow_all_users"  ON tx_users  FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all_ipmap"  ON tx_ipmap  FOR ALL USING (true) WITH CHECK (true);
+
 -- Bảng lưu kết quả phiên realtime
 CREATE TABLE IF NOT EXISTS tx_results (
   id            bigserial PRIMARY KEY,
@@ -70,3 +93,22 @@ CREATE POLICY "allow_read_history" ON tx_history FOR SELECT USING (true);
 CREATE POLICY "allow_insert_results" ON tx_results FOR INSERT WITH CHECK (true);
 CREATE POLICY "allow_insert_predictions" ON tx_predictions FOR INSERT WITH CHECK (true);
 CREATE POLICY "allow_upsert_history" ON tx_history FOR ALL USING (true);
+
+-- ── BẢNG BẢO TRÌ SẢNH (sync cho tất cả user) ──────────────
+CREATE TABLE IF NOT EXISTS tx_maintenance (
+  app      text PRIMARY KEY,
+  enabled  boolean DEFAULT false,
+  updated_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE tx_maintenance ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "allow_all_maint" ON tx_maintenance FOR ALL USING (true) WITH CHECK (true);
+
+-- Thêm dữ liệu mặc định (tất cả sảnh online)
+INSERT INTO tx_maintenance (app, enabled) VALUES
+  ('sunwin',   false),
+  ('xocdia88', false),
+  ('hitclub',  false),
+  ('lc79',     false),
+  ('betvip',   false)
+ON CONFLICT (app) DO NOTHING;
