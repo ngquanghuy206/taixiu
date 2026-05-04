@@ -767,6 +767,10 @@ async function supaStartGameRealtime(app, api) {
         if (window._predLog[logKey].length > 100) window._predLog[logKey].shift();
       }
       window._pendingPred[app][api.label] = null;
+      // TTS đọc kết quả đúng/sai
+      if (window.TxTTS) { try { window.TxTTS.announceVerdict(ok, pp.pred, actualKq, app); } catch(e) {} }
+      // Sound feedback
+      if (window.TxSound) { try { ok ? window.TxSound.play.success() : window.TxSound.play.error(); } catch(e) {} }
       // Typing animation
       startAITyping(ok ? "correct" : "wrong");
       // Cập nhật % trên lobby card

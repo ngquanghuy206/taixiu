@@ -294,6 +294,7 @@ window.TxTTS = (function() {
   let _voiceVI = null;
   let _lastSpokenKey = ""; // key = "app|text" để tránh đọc trùng CÙNG sảnh
   let _currentApp = null;  // sảnh đang xem — được set từ app.js
+  let _resetTimer = null;
 
   // Tên hiển thị của từng sảnh
   const APP_NAMES = {
@@ -325,18 +326,19 @@ window.TxTTS = (function() {
 
   // Đặt sảnh hiện tại (gọi từ app.js khi user mở sảnh)
   function setApp(app) {
-    if (_currentApp !== app) {
-      _currentApp = app;
-      _lastSpokenKey = ""; // reset khi đổi sảnh, tránh bỏ qua câu đầu tiên
-    }
+    _currentApp = app;
+    _lastSpokenKey = ""; // reset mỗi lần đổi sảnh
   }
 
   function speak(text, app) {
     if (!_on || !_synth) return;
     const appKey = app || _currentApp || "";
     const key = appKey + "|" + text;
-    if (key === _lastSpokenKey) return; // tránh đọc lại ĐÚNG SẢN này với ĐÚNG câu này
+    if (key === _lastSpokenKey) return; // tránh đọc lại cùng câu cùng sảnh liên tục
     _lastSpokenKey = key;
+    // Tự động reset sau 30s để câu giống nhau ở phiên tiếp theo vẫn được đọc
+    clearTimeout(_resetTimer);
+    _resetTimer = setTimeout(() => { _lastSpokenKey = ""; }, 30000);
     // Cancel giọng đang đọc
     try { _synth.cancel(); } catch(e) {}
     const utter = new SpeechSynthesisUtterance(text);
@@ -351,9 +353,7 @@ window.TxTTS = (function() {
   // Đọc kết quả dự đoán: "Sunwin — Dự đoán phiên 123 sẽ ra Tài"
   function announcePredict(phien, result, app) {
     if (!phien || !result) return;
-    // Chỉ đọc nếu đang xem đúng sảnh này
     const targetApp = app || _currentApp;
-    if (window._curApp && targetApp && window._curApp !== targetApp) return;
     const appName = getAppName(targetApp);
     const prefix = appName ? appName + " — " : "";
     const text = `${prefix}Dự đoán phiên ${phien} sẽ ra ${result}`;
@@ -362,9 +362,7 @@ window.TxTTS = (function() {
 
   // Đọc kết quả đúng/sai
   function announceVerdict(ok, pred, actual, app) {
-    // Chỉ đọc nếu đang xem đúng sảnh này
     const targetApp = app || _currentApp;
-    if (window._curApp && targetApp && window._curApp !== targetApp) return;
     if (ok) speak(`Chính xác! Bot đoán đúng ${pred}`, targetApp);
     else speak(`Sai rồi! Bot đoán ${pred}, kết quả thực tế là ${actual}`, targetApp);
   }
