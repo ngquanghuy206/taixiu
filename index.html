@@ -51,6 +51,19 @@
     <div class="auth-sub">Tool Dự Đoán · By Nguyễn Quang Huy Dzi</div>
     <input id="inp-user" class="auth-field" type="text" placeholder="Tài khoản" autocomplete="off"/>
     <input id="inp-pass" class="auth-field" type="password" placeholder="Mật khẩu"/>
+    <label class="auth-remember">
+      <input type="checkbox" id="chk-remember"/>
+      <span>Lưu đăng nhập</span>
+    </label>
+    <div class="captcha-wrap">
+      <div class="captcha-question-row">
+        <span class="captcha-question" id="captcha-question"></span>
+        <span class="captcha-eq">=  ?</span>
+        <button class="captcha-refresh" onclick="refreshCaptcha()" title="Câu khác">🔄</button>
+      </div>
+      <div class="captcha-btns" id="captcha-btns"></div>
+    </div>
+    <div class="captcha-err" id="captcha-err"></div>
     <button class="auth-btn" id="login-btn" onclick="doLogin()">ĐĂNG NHẬP</button>
     <div class="auth-err" id="auth-err"></div>
     <div class="auth-contact-notice">
@@ -170,7 +183,10 @@
             <div class="pred-head-title">
               <span class="pred-head-dot"></span>🧠 DỰ ĐOÁN AI
             </div>
-            <button class="pred-close" onclick="closePred()">✕</button>
+            <div class="pred-head-actions">
+              <button class="pred-toggle-btn" id="pred-toggle-btn" onclick="togglePredCollapse()" title="Thu gọn">▾</button>
+              <button class="pred-close" onclick="closePred()" title="Đóng">✕</button>
+            </div>
           </div>
           <div class="pred-body" id="pred-body">
             <div class="pred-loading">
@@ -364,6 +380,44 @@
   // Enter to login
   document.getElementById("inp-pass").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
   document.getElementById("inp-user").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("inp-pass").focus(); });
+
+  // Lưu đăng nhập — load saved credentials
+  (function() {
+    const saved = JSON.parse(localStorage.getItem("tx_remember") || "null");
+    if (saved && saved.u && saved.p) {
+      document.getElementById("inp-user").value = saved.u;
+      document.getElementById("inp-pass").value = saved.p;
+      document.getElementById("chk-remember").checked = true;
+    }
+  })();
 </script>
+
+<!-- ── WEBVIEW MODAL ─────────────────────────────────── -->
+<div id="webview-overlay" class="webview-overlay hidden" onclick="if(event.target===this)closeWebview()">
+  <div class="webview-modal">
+    <div class="webview-topbar">
+      <div class="webview-title" id="webview-title">🎮 Sảnh Game</div>
+      <div class="webview-actions">
+        <button class="webview-btn-ext" onclick="openWebviewExternal()" title="Mở tab mới">↗</button>
+        <button class="webview-btn-close" onclick="closeWebview()" title="Đóng">✕</button>
+      </div>
+    </div>
+    <div class="webview-body">
+      <div class="webview-loading" id="webview-loading">
+        <div class="webview-spin"></div>
+        <div class="webview-load-txt">Đang tải sảnh...</div>
+      </div>
+      <div class="webview-blocked hidden" id="webview-blocked">
+        <div class="webview-blocked-icon">🚫</div>
+        <div class="webview-blocked-title">Sảnh không cho nhúng trực tiếp</div>
+        <div class="webview-blocked-sub">Bấm nút bên dưới để mở trong trình duyệt</div>
+        <button class="webview-open-ext-btn" onclick="openWebviewExternal()">🚀 Mở Sảnh</button>
+      </div>
+      <iframe id="webview-iframe" src="about:blank"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation"
+        referrerpolicy="no-referrer" allowfullscreen></iframe>
+    </div>
+  </div>
+</div>
 </body>
 </html>
