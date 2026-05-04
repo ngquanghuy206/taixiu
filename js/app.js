@@ -372,9 +372,11 @@ function openWebview(app) {
         if (!doc || doc.location.href === "about:blank") {
           blocked.classList.remove("hidden");
         }
+        // doc accessible + không phải about:blank → OK
       } catch {
-        // cross-origin blocked — still loaded fine visually
+        // cross-origin exception = proxy đang chạy, iframe hiển thị bình thường
         loading.style.display = "none";
+        blocked.classList.add("hidden");
       }
     };
     iframe.onerror = () => {
@@ -391,7 +393,8 @@ function openWebview(app) {
             blocked.classList.remove("hidden");
           }
         } catch {
-          blocked.classList.remove("hidden");
+          // cross-origin = proxy OK
+          blocked.classList.add("hidden");
         }
       }
     }, 5000);
@@ -456,40 +459,53 @@ function openLobbyTab() {
 }
 
 function loadIframe(app) {
-  const iframe  = document.getElementById("game-iframe");
-  const blocker = document.getElementById("iframe-blocker");
+  const iframe   = document.getElementById("game-iframe");
+  const blocker  = document.getElementById("iframe-blocker");
   const floatBtn = document.getElementById("lobby-float-btn");
-  const url     = LOBBY_URLS[app] || "about:blank";
+  const rawUrl   = LOBBY_URLS[app] || "about:blank";
+
+  // Dùng proxy để bypass X-Frame-Options / CSP (giống openWebview)
+  const proxyUrl = (typeof PROXY_BASE !== "undefined" && PROXY_BASE && rawUrl !== "about:blank")
+    ? `${PROXY_BASE}/proxy?url=${encodeURIComponent(rawUrl)}`
+    : rawUrl;
+
   blocker.classList.add("hidden");
   floatBtn?.classList.add("hidden");
-  document.getElementById("iframe-msg-url").textContent = url;
-  iframe.src = url;
-  iframe.onload = () => {
-    try {
-      // Nếu đọc được contentDocument thì iframe load OK
-      const doc = iframe.contentDocument;
-      if (doc && doc.location.href !== "about:blank") {
-        blocker.classList.add("hidden");
-      } else {
-        blocker.classList.remove("hidden");
-      }
-    } catch {
-      // Bị chặn cross-origin → hiện blocker
-      blocker.classList.remove("hidden");
-    }
-  };
-  iframe.onerror = () => blocker.classList.remove("hidden");
-  // Timeout fallback: nếu 3.5s vẫn không load được
+  document.getElementById("iframe-msg-url").textContent = rawUrl;
+
+  iframe.src = "about:blank";
   setTimeout(() => {
-    try {
-      const doc = iframe.contentDocument;
-      if (!doc || doc.URL === "about:blank" || doc.body === null) {
-        blocker.classList.remove("hidden");
+    iframe.src = proxyUrl;
+    iframe.onload = () => {
+      try {
+        const doc = iframe.contentDocument;
+        // Nếu doc accessible và không phải about:blank → OK
+        if (doc && doc.location.href !== "about:blank") {
+          blocker.classList.add("hidden");
+        } else if (doc && doc.location.href === "about:blank") {
+          blocker.classList.remove("hidden");
+        }
+        // cross-origin exception = loaded OK qua proxy
+      } catch {
+        // cross-origin → proxy đang chạy, iframe hiển thị bình thường
+        blocker.classList.add("hidden");
       }
-    } catch {
-      blocker.classList.remove("hidden");
-    }
-  }, 3500);
+    };
+    iframe.onerror = () => blocker.classList.remove("hidden");
+
+    // Timeout fallback 5s
+    setTimeout(() => {
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc || doc.URL === "about:blank" || doc.body === null) {
+          blocker.classList.remove("hidden");
+        }
+      } catch {
+        // cross-origin exception = proxy đang chạy OK, ẩn blocker
+        blocker.classList.add("hidden");
+      }
+    }, 5000);
+  }, 80);
 }
 
 // ── API TABS ───────────────────────────────────────────────
