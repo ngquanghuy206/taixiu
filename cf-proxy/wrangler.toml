@@ -1,0 +1,9 @@
+name = "tx-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Free plan limits: 100,000 req/day, 10ms CPU/req
+# Nâng cấp $5/tháng nếu cần nhiều hơn
+
+[env.production]
+name = "tx-proxy"
