@@ -123,8 +123,14 @@ CREATE TABLE IF NOT EXISTS bcr_results_v2 (
   results_raw      text,
   du_doan_tiep     text,
   do_tin_cay       int,
-  updated_at       timestamptz DEFAULT now()
+  updated_at       timestamptz DEFAULT now(),
+  UNIQUE(app, ban)
 );
+
+-- ⚠️ Migration: nếu bảng đã tồn tại, thêm UNIQUE constraint và xoá duplicate rows cũ
+-- Chạy 2 câu này trên Supabase SQL editor nếu bảng đã có data:
+-- DELETE FROM bcr_results_v2 WHERE id NOT IN (SELECT MAX(id) FROM bcr_results_v2 GROUP BY app, ban);
+-- ALTER TABLE bcr_results_v2 ADD CONSTRAINT bcr_results_v2_app_ban_unique UNIQUE (app, ban);
 
 -- ── BACCARAT VERDICTS v2 ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bcr_verdicts_v2 (
