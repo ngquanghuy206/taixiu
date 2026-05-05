@@ -415,16 +415,9 @@
 
 <!-- SCRIPTS (thứ tự quan trọng) -->
 <!-- Preload Supabase SDK sớm - tránh block khi login -->
-<script>
-(function(){
-  var s = document.createElement("script");
-  s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js";
-  s.async = true;
-  document.head.appendChild(s);
-})();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="js/config.js"></script>
-<script src="js/algorithms.js"></script>
+<script src="js/algorithms.js" onerror="console.error('[TX] algorithms.js KHÔNG LOAD ĐƯỢC!')"></script>
 <script src="js/supabase_rt.js"></script>
 <script src="js/app.js"></script>
 <script src="js/auth.js"></script>
