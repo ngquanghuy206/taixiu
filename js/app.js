@@ -515,9 +515,20 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
   if (!pb) return;
   const lb = ["Cái", "Con"];
   const rl = fullSeq.filter(k => lb.includes(k));
-  const { best, conf, votes, total } = (rl.length >= 5)
-    ? (typeof window.ensemblePredict === "function" ? window.ensemblePredict(rl, lb) : (typeof ensemblePredict === "function" ? ensemblePredict(rl, lb) : { best: null, conf: 0, votes: 0, total: 0 }))
-    : { best: null, conf: 0, votes: 0, total: 0 };
+  // Tính ensemble nếu đủ data
+  let best = null, conf = 0, votes = 0, total = 0;
+  if (rl.length >= 5) {
+    const _ep = typeof window.ensemblePredict === "function" ? window.ensemblePredict
+              : typeof ensemblePredict === "function" ? ensemblePredict : null;
+    if (_ep) try { ({ best, conf, votes, total } = _ep(rl, lb)); } catch(e) {}
+  }
+  // Fallback: lấy du_doan_tiep từ bot Python (Supabase) khi chưa đủ data
+  if (!best && ban.du_doan_tiep) {
+    const raw = ban.du_doan_tiep;
+    best  = raw === "Cai" ? "Cái" : raw === "Con" ? "Con" : raw === "Hoa" ? "Hòa" : raw;
+    conf  = ban.do_tin_cay || 0;
+    votes = 0; total = 0;
+  }
 
   const st = window._statData[app]?.[api.label] || { d: 0, s: 0 };
   const acc = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "N/A";
@@ -537,12 +548,14 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
     pb.innerHTML = `
       <div class="supa-pred-badge">🎴 Bàn ${banId} — ${gameName}</div>
       <div class="bcr-quick-stats">
-        <div class="bcr-qs-item"><span>🔴 Cái</span><strong>${caiPct}%</strong></div>
-        <div class="bcr-qs-item"><span>🔵 Con</span><strong>${conPct}%</strong></div>
-        <div class="bcr-qs-sep">|</div>
-        <div class="bcr-qs-item"><span>📊</span><strong>${total_p} phiên</strong></div>
+        <div class="bcr-qs-item"><span>🔴 Cái</span><strong style="color:#ef4444">${caiPct}%</strong><small>(${cai})</small></div>
+        <div class="bcr-qs-item"><span>🔵 Con</span><strong style="color:#3b82f6">${conPct}%</strong><small>(${con})</small></div>
+        <div class="bcr-qs-item"><span>🟡 Hòa</span><strong>${total_p > 0 ? Math.round(hoa/total_p*100) : 0}%</strong><small>(${hoa})</small></div>
       </div>
-      <div class="pred-loading"><span>Thu thập dữ liệu (${rl.length}/5)...</span></div>`;
+      <div class="pred-loading" style="margin-top:10px">
+        <span>⏳ Thu thập dữ liệu (${rl.length}/5)...</span>
+        <small style="display:block;opacity:.6;margin-top:4px">Bot đang cập nhật bàn này</small>
+      </div>`;
     return;
   }
   const cl  = RCL[best] || "";
@@ -1837,11 +1850,39 @@ function startAITyping(state) {
 }
 
 // ── HIST MODAL ──────────────────────────────────────────────
-function openHistModal(app, label, type) {
+async function openHistModal(app, label, type) {
   const isXD = type === "xocdia";
   const hist = window._histData[app]?.[label] || [];
   const st   = window._statData[app]?.[label] || { d: 0, s: 0 };
   const logKey = app + "_" + label;
+
+  // Nếu predLog rỗng → thử fetch verdicts từ Supabase
+  if (!window._predLog) window._predLog = {};
+  if (!window._predLog[logKey] || window._predLog[logKey].length === 0) {
+    try {
+      const table = (app === "bcr") ? DB_TABLES.bcrVerdicts : DB_TABLES.verdicts;
+      const vRes = await fetch(
+        `${SUPA_URL}/rest/v1/${table}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(label)}&order=created_at.desc&limit=100&select=phien,du_doan,ket_qua_thuc_te,dung`,
+        { headers: _SH() }
+      );
+      if (vRes.ok) {
+        const rows = await vRes.json();
+        if (Array.isArray(rows) && rows.length > 0) {
+          window._predLog[logKey] = [...rows].reverse().map(v => ({
+            phien:  String(v.phien),
+            pred:   normalizeKq(v.du_doan),
+            actual: normalizeKq(v.ket_qua_thuc_te),
+            ok:     v.dung
+          }));
+          // Update stats
+          const d = rows.filter(v => v.dung).length;
+          const s = rows.filter(v => !v.dung).length;
+          if (d + s > 0) window._statData[app][label] = { d, s };
+        }
+      }
+    } catch(e) {}
+  }
+
   const log = (window._predLog && window._predLog[logKey]) || [];
   const acc = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) : 0;
   const accColor = acc >= 60 ? "var(--green)" : acc >= 50 ? "var(--gold)" : "var(--tai)";
