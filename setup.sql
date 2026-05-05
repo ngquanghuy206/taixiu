@@ -1,114 +1,167 @@
 -- =====================================================
--- SETUP SUPABASE CHO TOOL TÀI XỈU BY DZI
--- Chạy file này trong Supabase SQL Editor
+-- SETUP SUPABASE — TOOL TÀI XỈU AI v9  by Dzi
+-- CHẠY FILE NÀY TRONG SUPABASE SQL EDITOR
+-- ⚠️ Dùng bảng _v2 để tránh ghi đè data cũ
 -- =====================================================
 
--- ── BẢNG QUẢN LÝ TÀI KHOẢN USER ──────────────────────────
+-- ── USER & AUTH (dùng chung với v1, không tạo lại) ─────────
 CREATE TABLE IF NOT EXISTS tx_users (
-  username     text PRIMARY KEY,
-  password     text NOT NULL,
-  expires      timestamptz NOT NULL,
-  max_devices  int DEFAULT 1,
-  created_at   timestamptz DEFAULT now()
+  username    text PRIMARY KEY,
+  password    text NOT NULL,
+  expires     timestamptz NOT NULL,
+  max_devices int DEFAULT 1,
+  created_at  timestamptz DEFAULT now()
 );
-
--- ── BẢNG QUẢN LÝ THIẾT BỊ (IP) ────────────────────────────
 CREATE TABLE IF NOT EXISTS tx_ipmap (
-  username  text PRIMARY KEY,
-  devices   jsonb DEFAULT '[]'::jsonb,
+  username   text PRIMARY KEY,
+  devices    jsonb DEFAULT '[]'::jsonb,
   updated_at timestamptz DEFAULT now()
 );
-
--- RLS cho tx_users và tx_ipmap
 ALTER TABLE tx_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tx_ipmap ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "allow_all_users" ON tx_users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "allow_all_ipmap" ON tx_ipmap FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "allow_all_users"  ON tx_users  FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "allow_all_ipmap"  ON tx_ipmap  FOR ALL USING (true) WITH CHECK (true);
+-- ── BẢO TRÌ (dùng chung — không tạo lại nếu đã có) ────────
+CREATE TABLE IF NOT EXISTS tx_maintenance (
+  app        text PRIMARY KEY,
+  enabled    boolean DEFAULT false,
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE tx_maintenance ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "allow_all_maint" ON tx_maintenance FOR ALL USING (true) WITH CHECK (true);
 
--- Bảng lưu kết quả phiên realtime
-CREATE TABLE IF NOT EXISTS tx_results (
+-- Thêm tất cả sảnh mới vào bảo trì (ON CONFLICT DO NOTHING)
+INSERT INTO tx_maintenance (app, enabled) VALUES
+  ('sunwin',   false), ('xocdia88', false), ('hitclub',  false),
+  ('lc79',     false), ('betvip',   false), ('789club',  false),
+  ('max789',   false), ('b52',      false), ('son789',   false),
+  ('luck8',    false), ('bcr',      false)
+ON CONFLICT (app) DO NOTHING;
+
+-- ── KẾT QUẢ PHIÊN v2 ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS tx_results_v2 (
   id            bigserial PRIMARY KEY,
   app           text NOT NULL,
   api_label     text NOT NULL,
   api_type      text NOT NULL,
+  game          text DEFAULT 'taixiu',
   phien         text NOT NULL,
   ket_qua       text,
   tong          int,
   xuc_xac_1     int,
   xuc_xac_2     int,
   xuc_xac_3     int,
+  xuc_xac_list  jsonb,
   md5_raw       text,
+  md5_enc       text,
+  thoi_gian     text,
   ket_qua_truyen_thong text,
   ket_qua_chi_tiet     text,
+  betting_nguoi_tai    int,
+  betting_nguoi_xiu    int,
+  betting_tien_tai     text,
+  betting_tien_xiu     text,
+  betting_tong_nguoi   int,
+  betting_tong_tien    text,
+  betting_trang_thai   text,
+  dem_nguoc            int,
+  jackpot              text,
+  phien_cuoc           text,
   created_at    timestamptz DEFAULT now()
 );
 
--- Bảng lưu dự đoán AI
-CREATE TABLE IF NOT EXISTS tx_predictions (
+-- ── DỰ ĐOÁN AI v2 ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS tx_predictions_v2 (
   id            bigserial PRIMARY KEY,
   app           text NOT NULL,
   api_label     text NOT NULL,
+  game          text DEFAULT 'taixiu',
   phien         text NOT NULL,
   du_doan       text NOT NULL,
   do_tin_cay    int,
   votes         int,
   total_methods int,
-  ket_qua_thuc  text,
-  dung_sai      text,
   created_at    timestamptz DEFAULT now()
 );
 
--- Bảng lưu lịch sử 80 phiên gần nhất (dùng cho web hiển thị)
-CREATE TABLE IF NOT EXISTS tx_history (
-  id            bigserial PRIMARY KEY,
-  app           text NOT NULL,
-  api_label     text NOT NULL,
-  history_json  jsonb NOT NULL,
-  stats_json    jsonb,
-  updated_at    timestamptz DEFAULT now(),
+-- ── LỊCH SỬ v2 (web đọc để hiển thị) ───────────────────────
+CREATE TABLE IF NOT EXISTS tx_history_v2 (
+  id           bigserial PRIMARY KEY,
+  app          text NOT NULL,
+  api_label    text NOT NULL,
+  history_json jsonb NOT NULL,
+  stats_json   jsonb,
+  updated_at   timestamptz DEFAULT now(),
   UNIQUE(app, api_label)
 );
 
--- Index để query nhanh
-CREATE INDEX IF NOT EXISTS idx_tx_results_app ON tx_results(app, api_label, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_tx_pred_app ON tx_predictions(app, api_label, created_at DESC);
-
--- Enable Realtime cho các bảng
-ALTER PUBLICATION supabase_realtime ADD TABLE tx_results;
-ALTER PUBLICATION supabase_realtime ADD TABLE tx_predictions;
-ALTER PUBLICATION supabase_realtime ADD TABLE tx_history;
-
--- Row Level Security (cho phép đọc public, ghi cần secret key)
-ALTER TABLE tx_results ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tx_predictions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tx_history ENABLE ROW LEVEL SECURITY;
-
--- Policy: cho phép đọc tất cả (web dùng publishable key đọc được)
-CREATE POLICY "allow_read_results" ON tx_results FOR SELECT USING (true);
-CREATE POLICY "allow_read_predictions" ON tx_predictions FOR SELECT USING (true);
-CREATE POLICY "allow_read_history" ON tx_history FOR SELECT USING (true);
-
--- Policy: cho phép insert/update (Python dùng secret key)
-CREATE POLICY "allow_insert_results" ON tx_results FOR INSERT WITH CHECK (true);
-CREATE POLICY "allow_insert_predictions" ON tx_predictions FOR INSERT WITH CHECK (true);
-CREATE POLICY "allow_upsert_history" ON tx_history FOR ALL USING (true);
-
--- ── BẢNG BẢO TRÌ SẢNH (sync cho tất cả user) ──────────────
-CREATE TABLE IF NOT EXISTS tx_maintenance (
-  app      text PRIMARY KEY,
-  enabled  boolean DEFAULT false,
-  updated_at timestamptz DEFAULT now()
+-- ── VERDICTS v2 (kiểm tra đúng/sai) ─────────────────────────
+CREATE TABLE IF NOT EXISTS tx_verdicts_v2 (
+  id               bigserial PRIMARY KEY,
+  app              text NOT NULL,
+  api_label        text NOT NULL,
+  game             text DEFAULT 'taixiu',
+  phien            text,
+  du_doan          text,
+  ket_qua_thuc_te  text,
+  dung             boolean,
+  updated_at       timestamptz DEFAULT now()
 );
 
-ALTER TABLE tx_maintenance ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "allow_all_maint" ON tx_maintenance FOR ALL USING (true) WITH CHECK (true);
+-- ── BACCARAT RESULTS v2 ───────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bcr_results_v2 (
+  id               bigserial PRIMARY KEY,
+  app              text DEFAULT 'bcr',
+  ban              text NOT NULL,
+  ket_qua_moi_nhat text,
+  tong_phien       int,
+  cai_count        int,
+  con_count        int,
+  hoa_count        int,
+  good_road        text,
+  results_raw      text,
+  du_doan_tiep     text,
+  do_tin_cay       int,
+  updated_at       timestamptz DEFAULT now()
+);
 
--- Thêm dữ liệu mặc định (tất cả sảnh online)
-INSERT INTO tx_maintenance (app, enabled) VALUES
-  ('sunwin',   false),
-  ('xocdia88', false),
-  ('hitclub',  false),
-  ('lc79',     false),
-  ('betvip',   false)
-ON CONFLICT (app) DO NOTHING;
+-- ── BACCARAT VERDICTS v2 ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bcr_verdicts_v2 (
+  id               bigserial PRIMARY KEY,
+  app              text DEFAULT 'bcr',
+  ban              text NOT NULL,
+  du_doan          text,
+  ket_qua_thuc_te  text,
+  dung             boolean,
+  updated_at       timestamptz DEFAULT now()
+);
+
+-- ── INDEX ──────────────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_tx_results_v2_app    ON tx_results_v2(app, api_label, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tx_pred_v2_app       ON tx_predictions_v2(app, api_label, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tx_history_v2_app    ON tx_history_v2(app, api_label);
+CREATE INDEX IF NOT EXISTS idx_bcr_results_v2_ban   ON bcr_results_v2(ban, updated_at DESC);
+
+-- ── REALTIME ──────────────────────────────────────────────────
+ALTER PUBLICATION supabase_realtime ADD TABLE tx_results_v2;
+ALTER PUBLICATION supabase_realtime ADD TABLE tx_predictions_v2;
+ALTER PUBLICATION supabase_realtime ADD TABLE tx_history_v2;
+
+-- ── RLS ────────────────────────────────────────────────────────
+ALTER TABLE tx_results_v2     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tx_predictions_v2 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tx_history_v2     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tx_verdicts_v2    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bcr_results_v2    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bcr_verdicts_v2   ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY IF NOT EXISTS "allow_read_results_v2"      ON tx_results_v2     FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "allow_read_pred_v2"         ON tx_predictions_v2 FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "allow_read_hist_v2"         ON tx_history_v2     FOR SELECT USING (true);
+CREATE POLICY IF NOT EXISTS "allow_insert_results_v2"    ON tx_results_v2     FOR INSERT WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "allow_insert_pred_v2"       ON tx_predictions_v2 FOR INSERT WITH CHECK (true);
+CREATE POLICY IF NOT EXISTS "allow_all_hist_v2"          ON tx_history_v2     FOR ALL USING (true);
+CREATE POLICY IF NOT EXISTS "allow_all_verdicts_v2"      ON tx_verdicts_v2    FOR ALL USING (true);
+CREATE POLICY IF NOT EXISTS "allow_all_bcr_results_v2"   ON bcr_results_v2    FOR ALL USING (true);
+CREATE POLICY IF NOT EXISTS "allow_all_bcr_verdicts_v2"  ON bcr_verdicts_v2   FOR ALL USING (true);
