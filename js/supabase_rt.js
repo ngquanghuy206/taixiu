@@ -44,7 +44,7 @@ async function supaInit() {
 async function supaFetchHistory(app, apiLabel) {
   try {
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/tx_history?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&select=history_json,stats_json,updated_at`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.history}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&select=history_json,stats_json,updated_at`,
       { headers: SUPA_HEADERS }
     );
     const rows = await res.json();
@@ -59,7 +59,7 @@ async function supaFetchHistory(app, apiLabel) {
 async function supaFetchResults(app, apiLabel, limit = 30) {
   try {
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/tx_results?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&order=created_at.desc&limit=${limit}&select=*`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.results}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&order=created_at.desc&limit=${limit}&select=*`,
       { headers: SUPA_HEADERS }
     );
     const rows = await res.json();
@@ -74,7 +74,7 @@ async function supaFetchResults(app, apiLabel, limit = 30) {
 async function supaFetchLatestPred(app, apiLabel) {
   try {
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/tx_predictions?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&order=created_at.desc&limit=1&select=*`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.predictions}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&order=created_at.desc&limit=1&select=*`,
       { headers: SUPA_HEADERS }
     );
     const rows = await res.json();
@@ -86,7 +86,7 @@ async function supaFetchLatestPred(app, apiLabel) {
 async function supaFetchAllLatest() {
   try {
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/tx_history?select=app,api_label,history_json,stats_json,updated_at`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.history}?select=app,api_label,history_json,stats_json,updated_at`,
       { headers: SUPA_HEADERS }
     );
     return await res.json();
@@ -106,7 +106,7 @@ async function supaSubscribeResults(app, apiLabel, onData) {
     .on("postgres_changes", {
       event:  "INSERT",
       schema: "public",
-      table:  "tx_results",
+      table:  DB_TABLES.results,
       filter: `app=eq.${app}`,
     }, payload => {
       const row = payload.new;
@@ -129,7 +129,7 @@ async function supaSubscribePredictions(app, apiLabel, onData) {
     .on("postgres_changes", {
       event:  "INSERT",
       schema: "public",
-      table:  "tx_predictions",
+      table:  DB_TABLES.predictions,
       filter: `app=eq.${app}`,
     }, payload => {
       const row = payload.new;
@@ -152,7 +152,7 @@ async function supaSubscribeHistory(app, apiLabel, onData) {
     .on("postgres_changes", {
       event:  "UPDATE",
       schema: "public",
-      table:  "tx_history",
+      table:  DB_TABLES.history,
       filter: `app=eq.${app}`,
     }, payload => {
       const row = payload.new;

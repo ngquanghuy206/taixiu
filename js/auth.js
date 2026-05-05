@@ -11,14 +11,14 @@ const _SH = () => ({
 // ── USERS (Supabase) ────────────────────────────────────────
 async function getUsers() {
   try {
-    const r = await fetch(`${SUPA_URL}/rest/v1/tx_users?select=*&order=created_at.asc`, { headers: _SH() });
+    const r = await fetch(`${SUPA_URL}/rest/v1/${DB_TABLES.users}?select=*&order=created_at.asc`, { headers: _SH() });
     if (!r.ok) { console.error("getUsers lỗi:", await r.text()); return []; }
     return await r.json();
   } catch(e) { console.error("getUsers exception:", e); return []; }
 }
 
 async function saveUser(obj) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/tx_users`, {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${DB_TABLES.users}`, {
     method: "POST",
     headers: { ..._SH(), "Prefer": "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify(obj),
@@ -27,7 +27,7 @@ async function saveUser(obj) {
 }
 
 async function deleteUser(username) {
-  await fetch(`${SUPA_URL}/rest/v1/tx_users?username=eq.${encodeURIComponent(username)}`, {
+  await fetch(`${SUPA_URL}/rest/v1/${DB_TABLES.users}?username=eq.${encodeURIComponent(username)}`, {
     method: "DELETE", headers: _SH(),
   });
 }
@@ -35,7 +35,7 @@ async function deleteUser(username) {
 // ── IPMAP / DEVICE (Supabase) ───────────────────────────────
 async function getDeviceList(username) {
   try {
-    const r = await fetch(`${SUPA_URL}/rest/v1/tx_ipmap?username=eq.${encodeURIComponent(username)}&select=devices`, { headers: _SH() });
+    const r = await fetch(`${SUPA_URL}/rest/v1/${DB_TABLES.ipmap}?username=eq.${encodeURIComponent(username)}&select=devices`, { headers: _SH() });
     if (!r.ok) return [];
     const rows = await r.json();
     return rows[0]?.devices || [];
@@ -43,7 +43,7 @@ async function getDeviceList(username) {
 }
 
 async function saveDeviceList(username, devices) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/tx_ipmap`, {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${DB_TABLES.ipmap}`, {
     method: "POST",
     headers: { ..._SH(), "Prefer": "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify({ username, devices }),
@@ -52,7 +52,7 @@ async function saveDeviceList(username, devices) {
 }
 
 async function resetDeviceList(username) {
-  await fetch(`${SUPA_URL}/rest/v1/tx_ipmap?username=eq.${encodeURIComponent(username)}`, {
+  await fetch(`${SUPA_URL}/rest/v1/${DB_TABLES.ipmap}?username=eq.${encodeURIComponent(username)}`, {
     method: "DELETE", headers: _SH(),
   });
 }
@@ -221,7 +221,7 @@ async function doLogin() {
     try {
       const ctrl = new AbortController();
       const tid  = setTimeout(() => ctrl.abort(), 8000);
-      const r = await fetch(`${SUPA_URL}/rest/v1/tx_users?select=*`, {
+      const r = await fetch(`${SUPA_URL}/rest/v1/${DB_TABLES.users}?select=*`, {
         headers: _SH(), signal: ctrl.signal
       });
       clearTimeout(tid);

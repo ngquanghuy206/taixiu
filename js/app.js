@@ -112,6 +112,276 @@ function launchApp() {
   }
 }
 
+
+// ── BCR BACCARAT TABLE PICKER ──────────────────────────────
+window._bcrTablesData = [];
+window._bcrPickerApp  = null;
+window._bcrSelectedTable = null;
+
+async function openBcrTablePicker(app) {
+  // Check maintenance first
+  const underMaint = await isUnderMaintenance(app);
+  if (underMaint) { showToast("🔧 Sảnh Baccarat đang bảo trì!", "warn"); return; }
+
+  window._bcrPickerApp = app;
+  const overlay = document.getElementById("bcr-picker-overlay");
+  if (!overlay) { console.error("BCR picker overlay not found"); return; }
+
+  overlay.classList.remove("hidden");
+  const grid = document.getElementById("bcr-table-grid");
+  const loading = document.getElementById("bcr-picker-loading");
+  if (grid) grid.innerHTML = "";
+  if (loading) loading.style.display = "flex";
+
+  try {
+    const api = APIS[app]?.[0];
+    if (!api) throw new Error("No API for BCR");
+
+    // Fetch dữ liệu baccarat
+    const res = await fetch(api.url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error("API lỗi " + res.status);
+    const raw = await res.json();
+    const tables = Array.isArray(raw) ? raw : (raw.data || []);
+    window._bcrTablesData = tables;
+
+    if (loading) loading.style.display = "none";
+    if (!tables.length) {
+      if (grid) grid.innerHTML = '<div class="bcr-empty">Không có bàn nào đang hoạt động</div>';
+      return;
+    }
+    renderBcrTableGrid(tables, grid);
+  } catch(e) {
+    if (loading) loading.style.display = "none";
+    if (grid) grid.innerHTML = `<div class="bcr-empty">⚠️ Không thể tải danh sách bàn.<br/><small>${e.message}</small></div>`;
+  }
+}
+
+function renderBcrTableGrid(tables, grid) {
+  if (!grid) return;
+  grid.innerHTML = "";
+  tables.forEach(ban => {
+    const banId   = ban.ban || ban.id || "?";
+    const results = ban.results || "";
+    const road    = ban.good_road || "";
+    const seq     = [...results].filter(c => "PBT".includes(c));
+    const total   = seq.length;
+    const cai     = results.split("B").length - 1;
+    const con     = results.split("P").length - 1;
+    const hoa     = results.split("T").length - 1;
+    const caiPct  = total > 0 ? Math.round(cai / total * 100) : 0;
+    const conPct  = total > 0 ? Math.round(con / total * 100) : 0;
+    const hoaPct  = total > 0 ? Math.round(hoa / total * 100) : 0;
+    const lastKq  = seq.length > 0 ? {"P":"Con","B":"Cái","T":"Hòa"}[seq[seq.length-1]] || "?" : "?";
+    const lastEmoji = RE[lastKq] || "⬜";
+    const lastCl  = RCL[lastKq] || "";
+
+    // Recent 8 results
+    const recent8 = seq.slice(-8).map(c => {
+      const k = {"P":"Con","B":"Cái","T":"Hòa"}[c] || c;
+      return `<span class="bcr-dot ${RCL[k]||""}">${RE[k]||"?"}</span>`;
+    }).join("");
+
+    const card = document.createElement("div");
+    card.className = "bcr-table-card";
+    card.dataset.banId = banId;
+    card.innerHTML = `
+      <div class="bcr-table-header">
+        <div class="bcr-table-num">Bàn ${banId}</div>
+        <div class="bcr-table-kq ${lastCl}">${lastEmoji} ${lastKq}</div>
+      </div>
+      <div class="bcr-table-recent">${recent8}</div>
+      <div class="bcr-table-stats">
+        <div class="bcr-stat-item tai"><span>🔴 Cái</span><strong>${caiPct}%</strong><small>(${cai})</small></div>
+        <div class="bcr-stat-item xiu"><span>🔵 Con</span><strong>${conPct}%</strong><small>(${con})</small></div>
+        <div class="bcr-stat-item hoa"><span>🟡 Hòa</span><strong>${hoaPct}%</strong><small>(${hoa})</small></div>
+      </div>
+      <div class="bcr-table-road">🛤️ ${road || "—"}</div>
+      <div class="bcr-table-total">📊 ${total} phiên</div>
+      <button class="bcr-enter-btn" onclick="enterBcrTable('${banId}')">Vào Bàn ${banId} →</button>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function closeBcrPicker() {
+  const overlay = document.getElementById("bcr-picker-overlay");
+  if (overlay) overlay.classList.add("hidden");
+  window._bcrPickerApp = null;
+}
+
+async function enterBcrTable(banId) {
+  const app = window._bcrPickerApp || "bcr";
+  window._bcrSelectedTable = banId;
+  closeBcrPicker();
+  // Mở game view Baccarat cho bàn đã chọn
+  await openBcrGame(app, banId);
+}
+
+async function openBcrGame(app, banId) {
+  const underMaint = await isUnderMaintenance(app);
+  if (underMaint) { showToast("🔧 Sảnh Baccarat đang bảo trì!", "warn"); return; }
+
+  window._curApp    = app;
+  window._curApiIdx = 0;
+  window._bcrSelectedTable = banId;
+
+  if (!window._histData[app]) window._histData[app] = {};
+  if (!window._statData[app]) window._statData[app] = {};
+  if (!window._lastPhien[app]) window._lastPhien[app] = {};
+  if (!window._pendingPred[app]) window._pendingPred[app] = {};
+
+  const label = APIS[app]?.[0]?.label || "Baccarat";
+  window._histData[app][label]    = window._histData[app][label] || [];
+  window._statData[app][label]    = window._statData[app][label] || { d: 0, s: 0 };
+  window._lastPhien[app][label]   = window._lastPhien[app][label] || null;
+  window._pendingPred[app][label] = window._pendingPred[app][label] || null;
+
+  setActivePage("game");
+  const em = BRAND_EMOJI[app] || "🎴";
+  document.getElementById("game-brand-tag").textContent = `${em} BCR — Bàn ${banId}`;
+  document.getElementById("topbar-center").innerHTML    = `<span class="topbar-brand">${em} Baccarat — Bàn ${banId}</span>`;
+
+  buildApiTabs();
+  updateLobbyBtnLabel(app);
+  openPred();
+  closeSidebar();
+
+  // Load BCR data for selected table
+  doFetchBcr(app, banId);
+  clearInterval(window._fetchTimer);
+  window._fetchTimer = setInterval(() => doFetchBcr(app, banId), 15000);
+
+  showCalcEffect();
+}
+
+async function doFetchBcr(app, banId) {
+  const api = APIS[app]?.[0];
+  if (!api) return;
+  const pb = document.getElementById("pred-body");
+  try {
+    const res = await fetch(api.url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error("API lỗi");
+    const raw = await res.json();
+    const tables = Array.isArray(raw) ? raw : (raw.data || []);
+    const ban = tables.find(b => String(b.ban) === String(banId) || String(b.id) === String(banId));
+    if (!ban) { if (pb) pb.innerHTML = `<div class="pred-loading">⚠️ Không tìm thấy bàn ${banId}</div>`; return; }
+
+    const results = ban.results || "";
+    const road    = ban.good_road || "";
+    const seq     = [...results].filter(c => "PBT".includes(c));
+    const kqMap   = {"P":"Con","B":"Cái","T":"Hòa"};
+    const fullSeq = seq.map(c => kqMap[c] || c);
+    const label   = api.label;
+    const lastKq  = fullSeq[fullSeq.length - 1] || "?";
+
+    // Save history
+    const hist = window._histData[app]?.[label] || [];
+    window._histData[app][label] = fullSeq.slice(-80).map((kq, i) => ({ phien: String(i+1), ket_qua: kq }));
+
+    renderBcrPredPanel(app, api, ban, fullSeq, road);
+    renderHistBarBcr(app, api, fullSeq);
+  } catch(e) {
+    if (pb) pb.innerHTML = `<div class="pred-loading">⚠️ Lỗi tải dữ liệu bàn ${banId}</div>`;
+  }
+}
+
+function renderHistBarBcr(app, api, fullSeq) {
+  const ph  = document.getElementById("pred-hist");
+  const bar = document.getElementById("pred-hist-bar");
+  if (!ph || !bar) return;
+  if (!fullSeq.length) { ph.classList.add("hidden"); return; }
+  ph.classList.remove("hidden");
+  bar.innerHTML = "";
+  const recent = fullSeq.slice(-14);
+  let cai = 0, con = 0;
+  recent.forEach(kq => {
+    const d = document.createElement("div");
+    d.className = "h-dot " + (RCL[kq] || "");
+    d.title = kq;
+    d.textContent = RE[kq] || "?";
+    bar.appendChild(d);
+    if (kq === "Cái") cai++;
+    else if (kq === "Con") con++;
+  });
+  let summaryEl = document.getElementById("pred-hist-summary");
+  if (!summaryEl) {
+    summaryEl = document.createElement("div");
+    summaryEl.id = "pred-hist-summary";
+    summaryEl.className = "pred-hist-summary";
+    ph.appendChild(summaryEl);
+  }
+  summaryEl.innerHTML = `<div class="hist-sum-row">
+    <span class="hist-sum-item tai">🔴 Cái: <strong>${cai}</strong></span>
+    <span class="hist-sum-sep">·</span>
+    <span class="hist-sum-item xiu">🔵 Con: <strong>${con}</strong></span>
+  </div>`;
+}
+
+function renderBcrPredPanel(app, api, ban, fullSeq, road) {
+  const pb = document.getElementById("pred-body");
+  if (!pb) return;
+  const lb = ["Cái", "Con"];
+  const rl = fullSeq.filter(k => lb.includes(k));
+  const { best, conf, votes, total } = (rl.length >= 5)
+    ? ensemblePredict(rl, lb)
+    : { best: null, conf: 0, votes: 0, total: 0 };
+
+  const st = window._statData[app]?.[api.label] || { d: 0, s: 0 };
+  const acc = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "N/A";
+  const lastKq = fullSeq[fullSeq.length - 1] || "?";
+  const banId  = ban.ban || ban.id;
+  const cai  = (ban.results || "").split("B").length - 1;
+  const con  = (ban.results || "").split("P").length - 1;
+  const hoa  = (ban.results || "").split("T").length - 1;
+  const total_p = fullSeq.length;
+  const caiPct = total_p > 0 ? Math.round(cai/total_p*100) : 0;
+  const conPct = total_p > 0 ? Math.round(con/total_p*100) : 0;
+
+  if (!best) {
+    pb.innerHTML = `
+      <div class="supa-pred-badge">🎴 Bàn ${banId}</div>
+      <div class="bcr-quick-stats">
+        <div class="bcr-qs-item"><span>🔴 Cái</span><strong>${caiPct}%</strong></div>
+        <div class="bcr-qs-item"><span>🔵 Con</span><strong>${conPct}%</strong></div>
+        <div class="bcr-qs-sep">|</div>
+        <div class="bcr-qs-item"><span>📊</span><strong>${total_p} phiên</strong></div>
+      </div>
+      <div class="pred-loading"><span>Thu thập dữ liệu (${rl.length}/5)...</span></div>`;
+    return;
+  }
+  const cl  = RCL[best] || "";
+  const confColor = conf >= 70 ? "#22c55e" : conf >= 55 ? "#ffd700" : "#ef4444";
+  const nextPhien = fullSeq.length + 1;
+
+  pb.innerHTML = `
+    <div class="supa-pred-badge">🎴 Bàn ${banId} — Baccarat</div>
+    <div class="bcr-quick-stats">
+      <div class="bcr-qs-item"><span>🔴 Cái</span><strong style="color:#ef4444">${caiPct}%</strong><small>(${cai})</small></div>
+      <div class="bcr-qs-item"><span>🔵 Con</span><strong style="color:#3b82f6">${conPct}%</strong><small>(${con})</small></div>
+      <div class="bcr-qs-item"><span>🟡 Hòa</span><strong>${hoa > 0 ? Math.round(hoa/total_p*100) : 0}%</strong><small>(${hoa})</small></div>
+    </div>
+    <div class="bcr-road-tag">🛤️ Đường đi: <strong>${road || "—"}</strong></div>
+    <div class="pred-next-lbl">Dự đoán phiên #${nextPhien}</div>
+    <div class="pred-emoji-big spin-on-change">${RE[best] || "?"}</div>
+    <div class="pred-label ${cl}">${best}</div>
+    <div class="conf-bar-wrap">
+      <div class="conf-bar-bg">
+        <div class="conf-bar-fill" style="width:${conf}%;background:linear-gradient(90deg,${confColor},${confColor}aa)"></div>
+      </div>
+      <div class="conf-pct-row">
+        <span>Độ tin cậy</span>
+        <span style="color:${confColor};font-weight:700">${conf}%</span>
+      </div>
+    </div>
+    <div class="pred-stats-row">
+      <div class="pred-stat"><div class="pred-stat-val" style="color:var(--accent)">${votes}/${total}</div><div class="pred-stat-lbl">Đồng thuận</div></div>
+      <div class="pred-stat"><div class="pred-stat-val">${acc}</div><div class="pred-stat-lbl">Chính xác</div></div>
+      <div class="pred-stat"><div class="pred-stat-val" style="color:var(--green)">${st.d}</div><div class="pred-stat-lbl">✅ Đúng</div></div>
+      <div class="pred-stat"><div class="pred-stat-val" style="color:var(--tai)">${st.s}</div><div class="pred-stat-lbl">❌ Sai</div></div>
+    </div>
+    <div class="algo-badge">🧠 ${total} thuật toán · Ensemble AI</div>`;
+}
+
 // ── SIDEBAR ────────────────────────────────────────────────
 function toggleSidebar() {
   document.getElementById("sidebar").classList.toggle("open");
@@ -174,8 +444,8 @@ async function renderLobbyManager() {
   const g = document.getElementById("lobby-mgr-grid");
   if (!g) return;
   g.innerHTML = "";
-  const maint = await getMaintenance();
-  // Lấy tất cả sảnh từ APIS (đảm bảo đủ 5)
+  const maint = await getMaintenance(true);
+  // Lấy tất cả sảnh từ APIS
   const allApps = Object.keys(APIS);
   allApps.forEach((app) => {
     const em      = BRAND_EMOJI[app] || "🎰";
@@ -237,6 +507,9 @@ async function confirmMaintAction() {
   }
   btn.disabled = false;
   closeMaintModal();
+  // Force clear cache và refresh
+  _maintCache = null;
+  _maintLastFetch = 0;
   await renderLobbyManager();
   await buildLobbies(); // refresh home lobby grid
 }
@@ -248,45 +521,77 @@ async function buildLobbies() {
   const g = document.getElementById("lobby-grid");
   if (!g) return;
   g.innerHTML = "";
-  // Render ngay với maint = {} (không đơ chờ fetch)
+  // Render ngay với maint={} (không đơ chờ fetch)
   _renderLobbyCards(g, {});
   // Fetch maintenance song song → update card sau
-  getMaintenance().then(maint => _renderLobbyCards(g, maint)).catch(() => {});
+  getMaintenance(true).then(maint => _renderLobbyCards(g, maint)).catch(() => {});
+}
+
+function _makeLobbySectionHeader(title, icon, color) {
+  const div = document.createElement("div");
+  div.className = "lobby-section-header";
+  div.innerHTML = `<span class="lobby-section-icon">${icon}</span><span class="lobby-section-title" style="color:${color}">${title}</span><div class="lobby-section-line" style="background:${color}40"></div>`;
+  return div;
+}
+
+function _makelobbyCard(app, maint, idx) {
+  const em      = BRAND_EMOJI[app] || "🎰";
+  const grad    = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";
+  const col     = BRAND_COLOR[app] || "#00d4ff";
+  const isMaint = !!maint[app];
+  const c       = document.createElement("div");
+  c.className   = "lobby-card" + (isMaint ? " lobby-maint" : "");
+  c.dataset.app = app;
+  const imgUrl  = (typeof BRAND_IMG !== "undefined" && BRAND_IMG[app]) ? BRAND_IMG[app] : "";
+  const accHtml = getLobbyAccBadgeHtml(app);
+  const isBcr   = APIS_BCR && APIS_BCR[app];
+  c.innerHTML = `
+    <div class="lobby-banner" style="background:${grad}">
+      <div class="lobby-banner-inner">
+        ${imgUrl ? `<img src="${imgUrl}" class="lobby-logo-img" onerror="this.style.display='none'"/>` : `<div class="lobby-emoji">${em}</div>`}
+        <div class="lobby-glow-ring" style="border-color:${col}40"></div>
+      </div>
+      ${isMaint ? `<div class="lobby-maint-overlay"><span>🔧</span><span>BẢO TRÌ</span></div>` : ""}
+      <div class="lobby-particles"><span></span><span></span><span></span></div>
+      <div class="lobby-acc-badge" id="acc-badge-${app}">${accHtml}</div>
+    </div>
+    <div class="lobby-info">
+      <div class="lobby-name">${app.toUpperCase()}</div>
+      <div class="lobby-enter" style="color:${isMaint ? "#ff6b35" : col}">${isMaint ? "🔧 Đang bảo trì" : isBcr ? "🎴 Chọn bàn →" : "Vào sảnh →"}</div>
+    </div>`;
+  c.onclick = () => {
+    if (isMaint) { showToast("🔧 Sảnh này đang bảo trì!", "warn"); return; }
+    if (isBcr) { openBcrTablePicker(app); return; }
+    openGame(app);
+  };
+  setTimeout(() => c.classList.add("visible"), 50 * idx);
+  return c;
 }
 
 function _renderLobbyCards(g, maint) {
   g.innerHTML = "";
-  Object.entries(APIS).forEach(([app, apis]) => {
-    const em      = BRAND_EMOJI[app] || "🎰";
-    const grad    = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";
-    const col     = BRAND_COLOR[app] || "#00d4ff";
-    const isMaint = !!maint[app];
-    const c       = document.createElement("div");
-    c.className   = "lobby-card" + (isMaint ? " lobby-maint" : "");
-    c.dataset.app = app;
-    const imgUrl = (typeof BRAND_IMG !== "undefined" && BRAND_IMG[app]) ? BRAND_IMG[app] : "";
-    // Tính % chính xác từ statData
-    const accHtml = getLobbyAccBadgeHtml(app);
-    c.innerHTML = `
-      <div class="lobby-banner" style="background:${grad}">
-        <div class="lobby-banner-inner">
-          ${imgUrl ? `<img src="${imgUrl}" class="lobby-logo-img" onerror="this.style.display='none'"/>` : `<div class="lobby-emoji">${em}</div>`}
-          <div class="lobby-glow-ring" style="border-color:${col}40"></div>
-        </div>
-        ${isMaint ? `<div class="lobby-maint-overlay"><span>🔧</span><span>BẢO TRÌ</span></div>` : ""}
-        <div class="lobby-particles">
-          <span></span><span></span><span></span>
-        </div>
-        <div class="lobby-acc-badge" id="acc-badge-${app}">${accHtml}</div>
-      </div>
-      <div class="lobby-info">
-        <div class="lobby-name">${app.toUpperCase()}</div>
-        <div class="lobby-enter" style="color:${isMaint ? "#ff6b35" : col}">${isMaint ? "🔧 Đang bảo trì" : "Vào sảnh →"}</div>
-      </div>`;
-    c.onclick = () => isMaint ? showToast("🔧 Chức năng này đang được bảo trì!", "warn") : openGame(app);
-    g.appendChild(c);
-    setTimeout(() => c.classList.add("visible"), 50 * Object.keys(APIS).indexOf(app));
-  });
+  const txApps  = Object.keys(APIS_TX);
+  const bcrApps = Object.keys(APIS_BCR);
+
+  // ── SECTION: SẢnh TÀI XỈU ──
+  const txGrid = document.createElement("div");
+  txGrid.className = "lobby-section";
+  txGrid.appendChild(_makeLobbySectionHeader("Sảnh Tài Xỉu", "🎲", "#ffd700"));
+  const txCards = document.createElement("div");
+  txCards.className = "lobbies lobby-grid-inner";
+  txApps.forEach((app, i) => txCards.appendChild(_makelobbyCard(app, maint, i)));
+  txGrid.appendChild(txCards);
+  g.appendChild(txGrid);
+
+  // ── SECTION: SẢnh BACCARAT ──
+  const bcrGrid = document.createElement("div");
+  bcrGrid.className = "lobby-section";
+  bcrGrid.appendChild(_makeLobbySectionHeader("Sảnh Baccarat", "🎴", "#9b59b6"));
+  const bcrCards = document.createElement("div");
+  bcrCards.className = "lobbies lobby-grid-inner";
+  bcrApps.forEach((app, i) => bcrCards.appendChild(_makelobbyCard(app, maint, txApps.length + i)));
+  bcrGrid.appendChild(bcrCards);
+  g.appendChild(bcrGrid);
 }
 
 function getLobbyAccBadgeHtml(app) {
@@ -310,7 +615,15 @@ function updateLobbyAccBadge(app) {
 }
 
 // ── GAME ───────────────────────────────────────────────────
-function openGame(app) {
+async function openGame(app) {
+  // FIX: luôn check maintenance realtime từ Supabase trước khi vào
+  const underMaint = await isUnderMaintenance(app);
+  if (underMaint) {
+    showToast("🔧 Sảnh đang bảo trì — Vui lòng thử lại sau!", "warn");
+    // Refresh lobby để cập nhật badge bảo trì
+    getMaintenance(true).then(maint => _renderLobbyCards(document.getElementById("lobby-grid"), maint)).catch(() => {});
+    return;
+  }
   window._curApp    = app;
   window._curApiIdx = 0;
   // Thông báo cho TTS biết sảnh đang xem để tránh đọc nhầm sảnh
