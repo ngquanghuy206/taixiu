@@ -140,6 +140,7 @@ function launchApp() {
 window._bcrTablesData = [];
 window._bcrPickerApp  = null;
 window._bcrSelectedTable = null;
+window._bcrRetryTimer = null; // track retry timeout để cancel khi thoát
 
 async function openBcrTablePicker(app) {
   // Check maintenance first
@@ -282,6 +283,10 @@ async function openBcrGame(app, banId) {
   const underMaint = await isUnderMaintenance(app);
   if (underMaint) { showToast("🔧 Sảnh Baccarat đang bảo trì!", "warn"); return; }
 
+  // Cancel timer cũ (TX hoặc BCR trước đó) trước khi start
+  clearInterval(window._fetchTimer); window._fetchTimer = null;
+  if (window._bcrRetryTimer) { clearTimeout(window._bcrRetryTimer); window._bcrRetryTimer = null; }
+
   window._curApp    = app;
   window._curApiIdx = 0;
   window._bcrSelectedTable = banId;
@@ -322,11 +327,14 @@ async function openBcrGame(app, banId) {
 }
 
 async function doFetchBcr(app, banId) {
+  // GUARD: nếu user đã thoát sang sảnh khác → không làm gì cả
+  if (window._curApp !== app) return;
+  if (window._bcrSelectedTable !== banId) return;
   const api = APIS[app]?.[0];
   if (!api) return;
   const pb = document.getElementById("pred-body");
   // Hiện loading spinner ngay
-  if (pb && pb.innerHTML.includes("Lỗi") || (pb && !pb.innerHTML.trim())) {
+  if (pb && (pb.innerHTML.includes("Lỗi") || !pb.innerHTML.trim())) {
     if (pb) pb.innerHTML = `<div class="pred-loading"><span>🔄 Đang tải dữ liệu bàn ${banId}...</span></div>`;
   }
   // Thử fetch với retry (2 lần)
@@ -357,8 +365,9 @@ async function doFetchBcr(app, banId) {
     } catch(e) {
       if (attempt === 1) {
         if (pb) pb.innerHTML = `<div class="pred-loading">⚠️ Lỗi kết nối — đang thử lại...<br/><small>${e.message}</small></div>`;
-        // retry sau 3s
-        setTimeout(() => doFetchBcr(app, banId), 3000);
+        // retry sau 3s — lưu vào _bcrRetryTimer để có thể cancel khi thoát
+        if (window._bcrRetryTimer) clearTimeout(window._bcrRetryTimer);
+        window._bcrRetryTimer = setTimeout(() => doFetchBcr(app, banId), 3000);
       } else {
         await new Promise(r => setTimeout(r, 1500));
       }
@@ -547,6 +556,12 @@ function setActivePage(name) {
 
 function showHome() {
   clearInterval(window._fetchTimer); window._fetchTimer = null;
+  // Cancel BCR retry timer nếu đang pending
+  if (window._bcrRetryTimer) { clearTimeout(window._bcrRetryTimer); window._bcrRetryTimer = null; }
+  // Reset BCR state để không leak vào TX games
+  window._bcrSelectedTable = null;
+  window._bcrPickerApp = null;
+  window._curApp = null;
   if (window._adminTableTimer) { clearInterval(window._adminTableTimer); window._adminTableTimer = null; }
   const iframe = document.getElementById("game-iframe");
   if (iframe) iframe.src = "about:blank";
@@ -731,7 +746,7 @@ function _renderLobbyCards(g, maint) {
   // ── SECTION: SẢnh BACCARAT ──
   const bcrGrid = document.createElement("div");
   bcrGrid.className = "lobby-section";
-  bcrGrid.appendChild(_makeLobbySectionHeader("Sảnh Baccarat", "🎴", "#9b59b6"));
+  bcrGrid.appendChild(_makeLobbySectionHeader("Sảnh Baccarat Sexy", "🎴", "#9b59b6"));
   const bcrCards = document.createElement("div");
   bcrCards.className = "lobbies lobby-grid-inner";
   bcrApps.forEach((app, i) => bcrCards.appendChild(_makelobbyCard(app, maint, txApps.length + i)));
@@ -761,6 +776,9 @@ function updateLobbyAccBadge(app) {
 
 // ── GAME ───────────────────────────────────────────────────
 async function openGame(app) {
+  // Cancel BCR retry timer nếu đang pending — tránh leak doFetchBcr vào TX view
+  if (window._bcrRetryTimer) { clearTimeout(window._bcrRetryTimer); window._bcrRetryTimer = null; }
+  window._bcrSelectedTable = null;
   // FIX: luôn check maintenance realtime từ Supabase trước khi vào
   const underMaint = await isUnderMaintenance(app);
   if (underMaint) {
@@ -1056,7 +1074,7 @@ function buildApiTabs() {
   APIS[window._curApp].forEach((a, i) => {
     const t = document.createElement("button");
     t.className = "api-tab" + (i === 0 ? " active" : "");
-    t.textContent = a.label;
+    t.textContent = a.display || a.label;
     t.onclick = () => switchApi(i);
     tc.appendChild(t);
   });
@@ -1137,34 +1155,67 @@ async function doFetch() {
   await supaLoadFallback(app, api);
 }
 
-// Load dữ liệu từ Supabase database
+// Load dữ liệu từ Supabase — ưu tiên tx_results_v2 (từng phiên thực tế do Python đẩy)
 async function supaLoadFallback(app, api) {
   const pb = document.getElementById("pred-body");
   try {
-    const hist = await supaFetchHistory(app, api.label);
-    if (!hist || !hist.history_json || hist.history_json.length === 0) {
-      if (pb) pb.innerHTML = `<div class="pred-loading"><span>☁️ Đang tải dữ liệu từ AI KING DZI...</span></div>`;
-      return;
-    }
-    // Restore history vào state
-    window._histData[app][api.label] = [...hist.history_json];
-    if (hist.stats_json) {
-      window._statData[app][api.label] = { d: hist.stats_json.dung || 0, s: hist.stats_json.sai || 0 };
-    }
-    const latestRec = hist.history_json[hist.history_json.length - 1];
-    if (latestRec) {
-      window._lastPhien[app][api.label] = latestRec.phien;
+    // Bước 1: Load từng phiên từ tx_results_v2 (nguồn chính)
+    const rows = await supaFetchResults(app, api.label, 80);
+
+    if (!rows || rows.length === 0) {
+      // Fallback: thử tx_history_v2
+      const hist = await supaFetchHistory(app, api.label);
+      if (!hist || !hist.history_json || hist.history_json.length === 0) {
+        if (pb) pb.innerHTML = `<div class="pred-loading"><span>⏳ Chưa có dữ liệu — đang chờ bot cập nhật...</span></div>`;
+        if (window._curApp === app) {
+          clearInterval(window._fetchTimer);
+          window._fetchTimer = setTimeout(() => {
+            if (window._curApp === app) doFetch();
+          }, 5000);
+        }
+        return;
+      }
+      window._histData[app][api.label] = [...hist.history_json];
+      if (hist.stats_json) {
+        window._statData[app][api.label] = { d: hist.stats_json.dung || 0, s: hist.stats_json.sai || 0 };
+      }
+      const lr = hist.history_json[hist.history_json.length - 1];
+      if (lr) window._lastPhien[app][api.label] = lr.phien;
+    } else {
+      // Map row tx_results_v2 → format nội bộ
+      const mapped = rows.map(r => ({
+        phien:                r.phien,
+        ket_qua:              r.ket_qua,
+        tong:                 r.tong,
+        xuc_xac_1:            r.xuc_xac_1,
+        xuc_xac_2:            r.xuc_xac_2,
+        xuc_xac_3:            r.xuc_xac_3,
+        ket_qua_truyen_thong: r.ket_qua_truyen_thong,
+        ket_qua_chi_tiet:     r.ket_qua_chi_tiet,
+      }));
+      window._histData[app][api.label] = mapped;
+      // Load stats song song không block
+      supaFetchHistory(app, api.label).then(hist => {
+        if (hist && hist.stats_json) {
+          window._statData[app][api.label] = { d: hist.stats_json.dung || 0, s: hist.stats_json.sai || 0 };
+          updateLobbyAccBadge(app);
+        }
+      });
+      const lr = mapped[mapped.length - 1];
+      if (lr) window._lastPhien[app][api.label] = lr.phien;
     }
 
-    // Render lịch sử từ cloud
+    // Render lịch sử + KẾT QUẢ THỰC TẾ
     renderHistBar(app, api);
+    renderHubHist(app, api);
 
-    // Fetch + hiển thị dự đoán mới nhất từ cloud
+    // Fetch dự đoán mới nhất
     const pred = await supaFetchLatestPred(app, api.label);
     if (pred) supaRenderCloudPred(pred, app, api);
 
   } catch(err) {
     if (pb) pb.innerHTML = `<div class="pred-loading"><span>⚠️ Không kết nối được AI KING DZI</span></div>`;
+    console.error("[supaLoadFallback] loi:", err);
   }
 }
 
@@ -1251,6 +1302,7 @@ async function supaStartGameRealtime(app, api) {
     }
 
     renderHistBar(app, api);
+    renderHubHist(app, api);
     showToast(`🤖 AI KING DZI — Phiên mới: #${row.phien} — ${actualKq || ""}`, "info");
     if (window.TxSound) { try { window.TxSound.play.dice(); } catch(e) {} }
   });
@@ -1323,7 +1375,8 @@ function renderHistBar(app, api) {
   const lb = isXD ? ["Chẵn","Lẻ"] : ["Tài","Xỉu"];
   let tai = 0, xiu = 0;
   recent.forEach(r => {
-    const k = getKq(r, isXD) || "?";
+    const k = getKq(r, isXD);
+    if (!k || k === "?") return; // bỏ qua phiên chưa có kết quả
     const d = document.createElement("div");
     d.className = "h-dot " + (RCL[k] || "");
     d.title = k + (r.phien ? " #" + r.phien : "");

@@ -25,8 +25,8 @@ const DB_TABLES = {
 // ── SẢNH TÀI XỈU ────────────────────────────────────────────
 const APIS_TX = {
   sunwin: [
-    { label: "Tai Xiu", url: "https://markers-amenities-vertex-gratuit.trycloudflare.com/api/tx",      type: "normal" },
-    { label: "Sicbo",   url: "https://afterwards-motels-honors-vendors.trycloudflare.com/api/sunsicbo", type: "md5" },
+    { label: "Tai Xiu", display: "Tài Xỉu", url: "https://markers-amenities-vertex-gratuit.trycloudflare.com/api/tx",      type: "normal" },
+    { label: "Sicbo",   display: "Xúc Xắc", url: "https://afterwards-motels-honors-vendors.trycloudflare.com/api/sunsicbo", type: "md5" },
   ],
   xocdia88: [
     { label: "TX MD5",  url: "https://acres-scientists-balanced-paso.trycloudflare.com/api/taixiu",   type: "md5" },
@@ -64,7 +64,7 @@ const APIS_TX = {
 // ── SẢNH BACCARAT ────────────────────────────────────────────
 const APIS_BCR = {
   bcr: [
-    { label: "Baccarat Sexy", url: "https://classic-watching-cup-representatives.trycloudflare.com/api/bcr", type: "bcr", game: "baccarat" },
+    { label: "Baccarat", display: "Baccarat Sexy", url: "https://classic-watching-cup-representatives.trycloudflare.com/api/bcr", type: "bcr", game: "baccarat" },
   ],
 };
 
