@@ -509,7 +509,11 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
   const conPct = total_p > 0 ? Math.round(con/total_p*100) : 0;
   const gameName = api.label || "Baccarat Sexy";
 
-  if (!best) {
+  // Nếu ensemble không đủ data → dùng du_doan_tiep từ Supabase (bot.py đã tính)
+  const cloudBest = best || (ban.du_doan_tiep ? (ban.du_doan_tiep === "Cai" ? "Cái" : ban.du_doan_tiep === "Con" ? "Con" : ban.du_doan_tiep) : null);
+  const cloudConf = best ? conf : (ban.do_tin_cay || 0);
+
+  if (!cloudBest) {
     pb.innerHTML = `
       <div class="supa-pred-badge">🎴 Bàn ${banId} — ${gameName}</div>
       <div class="bcr-quick-stats">
@@ -518,11 +522,11 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
         <div class="bcr-qs-sep">|</div>
         <div class="bcr-qs-item"><span>📊</span><strong>${total_p} phiên</strong></div>
       </div>
-      <div class="pred-loading"><span>Thu thập dữ liệu (${rl.length}/5)...</span></div>`;
+      <div class="pred-loading"><span>⏳ Thu thập dữ liệu (${rl.length}/5)...</span></div>`;
     return;
   }
-  const cl  = RCL[best] || "";
-  const confColor = conf >= 70 ? "#22c55e" : conf >= 55 ? "#ffd700" : "#ef4444";
+  const cl  = RCL[cloudBest] || "";
+  const confColor = cloudConf >= 70 ? "#22c55e" : cloudConf >= 55 ? "#ffd700" : "#ef4444";
   const nextPhien = fullSeq.length + 1;
 
   pb.innerHTML = `
@@ -534,15 +538,15 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
     </div>
     <div class="bcr-road-tag">🛤️ Đường đi: <strong>${road || "—"}</strong></div>
     <div class="pred-next-lbl">Dự đoán phiên #${nextPhien}</div>
-    <div class="pred-emoji-big spin-on-change">${RE[best] || "?"}</div>
-    <div class="pred-label ${cl}">${best}</div>
+    <div class="pred-emoji-big spin-on-change">${RE[cloudBest] || "?"}</div>
+    <div class="pred-label ${cl}">${cloudBest}</div>
     <div class="conf-bar-wrap">
       <div class="conf-bar-bg">
-        <div class="conf-bar-fill" style="width:${conf}%;background:linear-gradient(90deg,${confColor},${confColor}aa)"></div>
+        <div class="conf-bar-fill" style="width:${cloudConf}%;background:linear-gradient(90deg,${confColor},${confColor}aa)"></div>
       </div>
       <div class="conf-pct-row">
         <span>Độ tin cậy</span>
-        <span style="color:${confColor};font-weight:700">${conf}%</span>
+        <span style="color:${confColor};font-weight:700">${cloudConf}%</span>
       </div>
     </div>
     <div class="pred-stats-row">
@@ -1204,16 +1208,8 @@ async function doFetch() {
 //  LOAD DATA + DỰ ĐOÁN — Nguồn chính: tx_history_v2 (bot.py)
 //  Flow: history_json (100 phiên) → ensemble predict → render
 // ══════════════════════════════════════════════════════════
-const _dbgLog = []; // debug log buffer hiện trên UI
 function _dbg(msg, data) {
-  const ts = new Date().toLocaleTimeString("vi-VN");
-  const line = `[${ts}] ${msg}`;
-  _dbgLog.unshift(line);
-  if (_dbgLog.length > 30) _dbgLog.pop();
-  console.log("[TX-AI]", msg, data !== undefined ? data : "");
-  // Cập nhật debug panel nếu đang mở
-  const dp = document.getElementById("debug-panel-body");
-  if (dp) dp.innerHTML = _dbgLog.map(l => `<div class="dbg-line">${l}</div>`).join("");
+  // debug logging removed for production
 }
 
 async function supaLoadFallback(app, api) {
@@ -1331,17 +1327,22 @@ async function supaLoadFallback(app, api) {
       window._pendingPred[app][api.label] = { pred: normalizeKq(pred.du_doan), pendingPhien: pred.phien };
     } else {
       // Không có dự đoán từ cloud → tính local bằng ensemble từ history
-      _dbg(`  ⚠️ Không có cloud pred → tính local ensemble`);
       const results = histArr
-        .map(r => isXD ? normalizeKq(r.ket_qua_truyen_thong || r.ket_qua) : r.ket_qua)
+        .map(r => {
+          const kq = isXD ? normalizeKq(r.ket_qua_truyen_thong || r.ket_qua) : normalizeKq(r.ket_qua);
+          return kq;
+        })
         .filter(r => r && lb.includes(r));
-      _dbg(`  📈 results cho ensemble: ${results.length} phiên hợp lệ (cần >= 5)`);
       if (results.length >= 5) {
+        renderPred(app, api, null);
+      } else if (histArr.length > 0) {
+        // Có data nhưng chưa đủ 5 kết quả hợp lệ → vẫn cố render
         renderPred(app, api, null);
       } else {
         if (pb) pb.innerHTML = `<div class="pred-loading">
-          <span>⏳ Thu thập dữ liệu (${results.length}/5)...</span>
-          <small style="opacity:.6;display:block;margin-top:4px">Bot đang push data...</small>
+          <span>⏳ Bot chưa đẩy dữ liệu lên</span>
+          <small style="opacity:.6;display:block;margin-top:4px">Kiểm tra tool đang chạy chưa?</small>
+          <button onclick="doFetch()" style="margin-top:8px;padding:5px 14px;background:#7c3aed;border:none;border-radius:8px;color:#fff;cursor:pointer">🔄 Thử lại</button>
         </div>`;
       }
     }
@@ -1784,16 +1785,7 @@ function buildAIReasoning(results, lb, best, conf, votes, total) {
 }
 
 // ── CALC EFFECT ────────────────────────────────────────────
-function toggleDebugPanel() {
-  const panel = document.getElementById("debug-panel");
-  if (!panel) return;
-  panel.classList.toggle("hidden");
-  // Refresh log khi mở
-  if (!panel.classList.contains("hidden")) {
-    const dp = document.getElementById("debug-panel-body");
-    if (dp) dp.innerHTML = _dbgLog.map(l => `<div class="dbg-line">${l}</div>`).join("");
-  }
-}
+
 
 function showCalcEffect() {
   const overlay = document.getElementById("calc-overlay");
