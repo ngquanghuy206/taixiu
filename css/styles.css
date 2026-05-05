@@ -39,9 +39,6 @@ body::after{
   overflow:hidden;
 }
 
-/* Canvas particle background */
-.auth-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
-
 /* Floating orbs */
 .auth-orbs{position:absolute;inset:0;pointer-events:none;z-index:0}
 .auth-orb{position:absolute;border-radius:50%;filter:blur(80px);animation:orbFloat 8s ease-in-out infinite}
@@ -79,7 +76,7 @@ body::after{
   .auth-scroll-wrap{padding:32px 16px 40px}
 }
 
-/* 3D CARD */
+/* AUTH CARD */
 .auth-box{
   position:relative;
   background:linear-gradient(145deg,rgba(10,20,40,.95),rgba(4,10,22,.98));
@@ -91,9 +88,6 @@ body::after{
     0 40px 80px rgba(0,0,0,.8),
     0 0 80px rgba(0,212,255,.06),
     inset 0 1px 0 rgba(255,255,255,.05);
-  transform-style:preserve-3d;
-  transition:transform .1s ease-out,box-shadow .3s;
-  will-change:transform;
 }
 .auth-box:hover{
   box-shadow:
@@ -245,7 +239,6 @@ body::after{
 @keyframes rippleOut{to{transform:scale(30);opacity:0}}
 
 /* Auth canvas */
-.auth-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
 
 /* ══════════════════════════════════
    APP SHELL
@@ -1779,3 +1772,190 @@ body::after{
 
 /* ── FIX: lobby-float-btn hidden trong layout mới ── */
 #page-game .lobby-float-btn { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════
+   v9 — LOBBY SECTIONS (Tài Xỉu / Baccarat) + BCR PICKER
+   ═══════════════════════════════════════════════════════════ */
+
+/* Lobby section wrapper */
+.lobby-section { margin-bottom: 24px; }
+
+.lobby-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 4px 14px;
+  padding-bottom: 8px;
+}
+.lobby-section-icon { font-size: 22px; }
+.lobby-section-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.lobby-section-line {
+  flex: 1;
+  height: 1px;
+}
+.lobby-grid-inner {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  padding: 0;
+}
+
+/* BCR Quick Stats in pred panel */
+.bcr-quick-stats {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 10px 0;
+  padding: 10px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+}
+.bcr-qs-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 52px;
+}
+.bcr-qs-item span { font-size: 11px; color: var(--muted2); }
+.bcr-qs-item strong { font-size: 16px; font-family: 'Orbitron', monospace; }
+.bcr-qs-item small { font-size: 10px; color: var(--muted2); }
+.bcr-qs-sep { color: var(--muted2); align-self: center; font-size: 18px; }
+.bcr-road-tag {
+  font-size: 12px;
+  color: var(--muted2);
+  text-align: center;
+  margin: 6px 0 10px;
+}
+.bcr-road-tag strong { color: var(--accent); }
+
+/* BCR Table Picker Overlay */
+.bcr-picker-box {
+  max-width: 680px !important;
+  width: 96vw !important;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.bcr-picker-sub {
+  font-size: 12px;
+  color: var(--muted2);
+  text-align: center;
+  margin: -8px 0 14px;
+}
+.bcr-picker-loading {
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px 0;
+  color: var(--muted2);
+  font-size: 13px;
+}
+.bcr-table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  overflow-y: auto;
+  max-height: 55vh;
+  padding: 2px 2px 8px;
+}
+.bcr-table-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.bcr-table-card:hover {
+  border-color: rgba(155,89,182,0.5);
+  box-shadow: 0 4px 20px rgba(155,89,182,0.15);
+}
+.bcr-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.bcr-table-num {
+  font-family: 'Orbitron', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #9b59b6;
+}
+.bcr-table-kq {
+  font-size: 13px;
+  font-weight: 700;
+}
+.bcr-table-kq.tai { color: #ef4444; }
+.bcr-table-kq.xiu { color: #3b82f6; }
+.bcr-table-kq.hoa { color: #fbbf24; }
+.bcr-table-recent {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.bcr-dot {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 13px;
+  background: rgba(255,255,255,0.06);
+}
+.bcr-table-stats {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+}
+.bcr-stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding: 5px 4px;
+}
+.bcr-stat-item span { color: var(--muted2); font-size: 10px; }
+.bcr-stat-item strong { font-size: 13px; font-weight: 700; }
+.bcr-stat-item small { color: var(--muted2); font-size: 9px; }
+.bcr-stat-item.tai strong { color: #ef4444; }
+.bcr-stat-item.xiu strong { color: #3b82f6; }
+.bcr-table-road, .bcr-table-total {
+  font-size: 11px;
+  color: var(--muted2);
+}
+.bcr-enter-btn {
+  margin-top: 4px;
+  padding: 9px;
+  background: linear-gradient(135deg,#9b59b6,#6c3483);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: .5px;
+  transition: opacity .2s, transform .1s;
+}
+.bcr-enter-btn:hover { opacity: .85; transform: translateY(-1px); }
+.bcr-empty {
+  text-align: center;
+  padding: 32px;
+  color: var(--muted2);
+  font-size: 14px;
+  line-height: 1.7;
+}
