@@ -44,11 +44,22 @@ async function supaInit() {
 async function supaFetchHistory(app, apiLabel) {
   try {
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/${DB_TABLES.history}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&select=history_json,stats_json,updated_at`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.history}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&select=history_json,stats_json,updated_at&limit=1`,
       { headers: SUPA_HEADERS }
     );
+    if (!res.ok) {
+      console.error("supaFetchHistory HTTP", res.status, await res.text());
+      return null;
+    }
     const rows = await res.json();
-    return rows[0] || null;
+    if (!Array.isArray(rows)) { console.error("supaFetchHistory: không phải array", rows); return null; }
+    const row = rows[0] || null;
+    if (row) {
+      console.log(`[supaFetchHistory] ${app}|${apiLabel}: ${row.history_json?.length || 0} phiên, updated=${row.updated_at}`);
+    } else {
+      console.warn(`[supaFetchHistory] ${app}|${apiLabel}: không có row nào`);
+    }
+    return row;
   } catch(e) {
     console.error("supaFetchHistory lỗi:", e);
     return null;
@@ -56,14 +67,17 @@ async function supaFetchHistory(app, apiLabel) {
 }
 
 // Fetch 30 phiên kết quả gần nhất
-async function supaFetchResults(app, apiLabel, limit = 30) {
+async function supaFetchResults(app, apiLabel, limit = 100) {
   try {
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/${DB_TABLES.results}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&order=created_at.desc&limit=${limit}&select=*`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.results}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&order=created_at.desc&limit=${limit}&select=phien,ket_qua,tong,xuc_xac_1,xuc_xac_2,xuc_xac_3,ket_qua_truyen_thong,ket_qua_chi_tiet,created_at`,
       { headers: SUPA_HEADERS }
     );
+    if (!res.ok) { console.error("supaFetchResults HTTP", res.status); return []; }
     const rows = await res.json();
-    return rows.reverse(); // cũ → mới
+    if (!Array.isArray(rows)) { console.error("supaFetchResults: không phải array", rows); return []; }
+    console.log(`[supaFetchResults] ${app}|${apiLabel}: ${rows.length} rows`);
+    return rows.reverse(); // desc → reverse → cũ đến mới
   } catch(e) {
     console.error("supaFetchResults lỗi:", e);
     return [];
@@ -74,12 +88,16 @@ async function supaFetchResults(app, apiLabel, limit = 30) {
 async function supaFetchLatestPred(app, apiLabel) {
   try {
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/${DB_TABLES.predictions}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&order=created_at.desc&limit=1&select=*`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.predictions}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(apiLabel)}&order=created_at.desc&limit=1&select=phien,du_doan,do_tin_cay,votes,total_methods,created_at`,
       { headers: SUPA_HEADERS }
     );
+    if (!res.ok) { console.error("supaFetchLatestPred HTTP", res.status); return null; }
     const rows = await res.json();
-    return rows[0] || null;
-  } catch(e) { return null; }
+    if (!Array.isArray(rows)) return null;
+    const row = rows[0] || null;
+    console.log(`[supaFetchLatestPred] ${app}|${apiLabel}:`, row ? `#${row.phien} ${row.du_doan} ${row.do_tin_cay}%` : "NULL");
+    return row;
+  } catch(e) { console.error("supaFetchLatestPred lỗi:", e); return null; }
 }
 
 // Fetch tất cả sảnh — latest result mỗi sảnh (cho trang home)

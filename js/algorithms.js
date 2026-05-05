@@ -404,7 +404,7 @@ function knnI(r,lb,k=5){
 }
 function hmm(r,lb){
   if(r.length<15)return half(lb);
-  const trans={};lb.forEach(a=>trans[a]={};lb.forEach(b=>trans[a][b]=1));
+  const trans={};lb.forEach(a=>{trans[a]={};lb.forEach(b=>trans[a][b]=1);});
   for(let i=0;i<r.length-1;i++){const a=r[i],b=r[i+1];if(trans[a]&&trans[a][b]!==undefined)trans[a][b]++;}
   lb.forEach(a=>{const t=Object.values(trans[a]).reduce((x,y)=>x+y,0);lb.forEach(b=>trans[a][b]/=t);});
   const last=r[r.length-1];const pr=trans[last];

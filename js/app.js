@@ -60,7 +60,7 @@ async function preloadAllStats() {
     try {
       const bcrRes = await fetch(
         `${SUPA_URL}/rest/v1/${DB_TABLES.bcrVerdicts}?select=app,api_label,dung,sai&order=updated_at.desc`,
-        { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
+        { headers: _SH() }
       );
       if (bcrRes.ok) {
         const bcrRows = await bcrRes.json();
@@ -162,7 +162,7 @@ async function openBcrTablePicker(app) {
     // order=updated_at.desc để lấy row mới nhất trước, sau đó deduplicate theo ban
     const res = await fetch(
       `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&select=ban,ket_qua_moi_nhat,tong_phien,cai_count,con_count,hoa_count,good_road,results_raw,du_doan_tiep,do_tin_cay,updated_at&order=updated_at.desc&limit=200`,
-      { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
+      { headers: _SH() }
     );
     if (!res.ok) throw new Error("Supabase lỗi " + res.status);
     const rawRows = await res.json();
@@ -312,6 +312,13 @@ async function openBcrGame(app, banId) {
   // Reset hub hist panel
   const hubInit = document.getElementById("hub-hist-panel");
   if (hubInit) hubInit.innerHTML = `<div class="hub-hist-empty">⏳ Đang tải dữ liệu...</div>`;
+  // Reset pred-hist bar và summary (tránh hiện "Tài/Xỉu" cũ từ TX)
+  const barInit = document.getElementById("pred-hist-bar");
+  const phInit  = document.getElementById("pred-hist");
+  if (barInit) barInit.innerHTML = "";
+  if (phInit)  phInit.classList.add("hidden");
+  const summaryInit = document.getElementById("pred-hist-summary");
+  if (summaryInit) summaryInit.innerHTML = "";
 
   buildApiTabs();
   updateLobbyBtnLabel(app);
@@ -345,7 +352,7 @@ async function doFetchBcr(app, banId) {
       const banVariantsEnc = banVariants.map(b => encodeURIComponent(b)).join(",");
       const res = await fetch(
         `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&ban=in.(${banVariantsEnc})&select=*&order=updated_at.desc&limit=1`,
-        { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
+        { headers: _SH() }
       );
       if (!res.ok) throw new Error("Supabase lỗi " + res.status);
       const rows = await res.json();
@@ -354,14 +361,20 @@ async function doFetchBcr(app, banId) {
         // Fallback: lấy tất cả rồi tìm match
         const res2 = await fetch(
           `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&select=ban,results_raw,good_road,du_doan_tiep,do_tin_cay,tong_phien,cai_count,con_count,hoa_count,updated_at&order=updated_at.desc&limit=200`,
-          { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
+          { headers: _SH() }
         );
         const rows2 = await res2.json();
         const fallbackBan = rows2?.find(r =>
           banVariants.some(v => String(r.ban).toLowerCase() === String(v).toLowerCase())
         );
         if (!fallbackBan) {
-          if (pb) pb.innerHTML = `<div class="pred-loading">⏳ Bàn ${banId} chưa có dữ liệu — đang chờ bot cập nhật...</div>`;
+          if (pb) pb.innerHTML = `<div class="pred-loading">
+            <span>⏳ Bàn ${banId} chưa có dữ liệu</span>
+            <small style="opacity:.7;display:block;margin-top:6px">Bot chưa cập nhật bàn này.<br/>Hệ thống sẽ tự thử lại sau 10 giây...</small>
+            <button onclick="doFetchBcr('${app}','${banId}')" style="margin-top:10px;padding:6px 18px;background:#7c3aed;border:none;border-radius:8px;color:#fff;cursor:pointer;font-size:13px">🔄 Thử lại ngay</button>
+          </div>`;
+          if (window._bcrRetryTimer) clearTimeout(window._bcrRetryTimer);
+          window._bcrRetryTimer = setTimeout(() => doFetchBcr(app, banId), 10000);
           return;
         }
         return _processBcrBanData(app, api, banId, fallbackBan, pb);
@@ -411,6 +424,9 @@ function renderHistBarBcr(app, api, fullSeq) {
   if (!ph || !bar) return;
   if (!fullSeq.length) { ph.classList.add("hidden"); return; }
   ph.classList.remove("hidden");
+  // Cập nhật label header cho BCR
+  const lbl = ph.querySelector(".pred-hist-label");
+  if (lbl) lbl.textContent = "Lịch sử Baccarat 14 phiên";
   bar.innerHTML = "";
   const recent = fullSeq.slice(-14);
   let cai = 0, con = 0;
@@ -1179,35 +1195,76 @@ async function doFetch() {
   await supaLoadFallback(app, api);
 }
 
-// Load dữ liệu từ Supabase — ưu tiên tx_results_v2 (từng phiên thực tế do Python đẩy)
+// ══════════════════════════════════════════════════════════
+//  LOAD DATA + DỰ ĐOÁN — Nguồn chính: tx_history_v2 (bot.py)
+//  Flow: history_json (100 phiên) → ensemble predict → render
+// ══════════════════════════════════════════════════════════
+const _dbgLog = []; // debug log buffer hiện trên UI
+function _dbg(msg, data) {
+  const ts = new Date().toLocaleTimeString("vi-VN");
+  const line = `[${ts}] ${msg}`;
+  _dbgLog.unshift(line);
+  if (_dbgLog.length > 30) _dbgLog.pop();
+  console.log("[TX-AI]", msg, data !== undefined ? data : "");
+  // Cập nhật debug panel nếu đang mở
+  const dp = document.getElementById("debug-panel-body");
+  if (dp) dp.innerHTML = _dbgLog.map(l => `<div class="dbg-line">${l}</div>`).join("");
+}
+
 async function supaLoadFallback(app, api) {
   const pb = document.getElementById("pred-body");
-  try {
-    // Bước 1: Load từng phiên từ tx_results_v2 (nguồn chính)
-    const rows = await supaFetchResults(app, api.label, 80);
+  const isXD = api.type === "xocdia";
+  const lb   = isXD ? ["Chẵn","Lẻ"] : ["Tài","Xỉu"];
+  const lbRaw = isXD ? ["Chan","Le"] : ["Tai","Xiu"]; // bot lưu không dấu
 
-    if (!rows || rows.length === 0) {
-      // Fallback: thử tx_history_v2
-      const hist = await supaFetchHistory(app, api.label);
-      if (!hist || !hist.history_json || hist.history_json.length === 0) {
-        if (pb) pb.innerHTML = `<div class="pred-loading"><span>⏳ Chưa có dữ liệu — đang chờ bot cập nhật...</span></div>`;
-        if (window._curApp === app) {
-          clearInterval(window._fetchTimer);
-          window._fetchTimer = setTimeout(() => {
-            if (window._curApp === app) doFetch();
-          }, 5000);
-        }
+  _dbg(`⏳ Load [${app}|${api.label}]`);
+
+  try {
+    // ── BƯỚC 1: Lấy toàn bộ history từ tx_history_v2 (nguồn ưu tiên) ──
+    // Bot.py upsert history_json (deque 100 phiên) + stats_json vào đây
+    const histRow = await supaFetchHistory(app, api.label);
+    _dbg(`  tx_history_v2 →`, histRow ? `${histRow.history_json?.length || 0} phiên, stats=${JSON.stringify(histRow.stats_json)}` : "NULL");
+
+    let histArr = [];
+    if (histRow && Array.isArray(histRow.history_json) && histRow.history_json.length > 0) {
+      // Normalize ket_qua: bot lưu "Tai"→"Tài", "Xiu"→"Xỉu", v.v.
+      histArr = histRow.history_json.map(r => ({
+        phien:                r.phien,
+        ket_qua:              normalizeKq(r.ket_qua),
+        tong:                 r.tong,
+        xuc_xac_1:            r.xuc_xac_1,
+        xuc_xac_2:            r.xuc_xac_2,
+        xuc_xac_3:            r.xuc_xac_3,
+        ket_qua_truyen_thong: normalizeKq(r.ket_qua_truyen_thong || r.ket_qua),
+        ket_qua_chi_tiet:     r.ket_qua_chi_tiet || "",
+      }));
+      _dbg(`  ✅ history_json OK: ${histArr.length} phiên, phiên cuối = #${histArr[histArr.length-1]?.phien}`);
+
+      // Lưu stats từ bot.py (đây là nguồn chính xác nhất)
+      if (histRow.stats_json) {
+        window._statData[app][api.label] = {
+          d: histRow.stats_json.dung || 0,
+          s: histRow.stats_json.sai  || 0
+        };
+        _dbg(`  📊 stats: đúng=${histRow.stats_json.dung} sai=${histRow.stats_json.sai}`);
+      }
+    } else {
+      // ── BƯỚC 2: Fallback → tx_results_v2 (từng phiên INSERT từ bot) ──
+      _dbg(`  ⚠️ history_json trống → fallback tx_results_v2`);
+      const rows = await supaFetchResults(app, api.label, 100);
+      _dbg(`  tx_results_v2 →`, `${rows?.length || 0} rows`);
+
+      if (!rows || rows.length === 0) {
+        _dbg(`  ❌ Không có data từ cả 2 nguồn`);
+        if (pb) pb.innerHTML = `<div class="pred-loading">
+          <span>⏳ Bot chưa đẩy dữ liệu lên</span>
+          <small style="opacity:.6;display:block;margin-top:4px">Kiểm tra bot.py đang chạy chưa?</small>
+          <button onclick="doFetch()" style="margin-top:8px;padding:5px 14px;background:#7c3aed;border:none;border-radius:8px;color:#fff;cursor:pointer">🔄 Thử lại</button>
+        </div>`;
         return;
       }
-      window._histData[app][api.label] = [...hist.history_json];
-      if (hist.stats_json) {
-        window._statData[app][api.label] = { d: hist.stats_json.dung || 0, s: hist.stats_json.sai || 0 };
-      }
-      const lr = hist.history_json[hist.history_json.length - 1];
-      if (lr) window._lastPhien[app][api.label] = lr.phien;
-    } else {
-      // Map row tx_results_v2 → format nội bộ
-      const mapped = rows.map(r => ({
+
+      histArr = rows.map(r => ({
         phien:                r.phien,
         ket_qua:              normalizeKq(r.ket_qua),
         tong:                 r.tong,
@@ -1217,43 +1274,78 @@ async function supaLoadFallback(app, api) {
         ket_qua_truyen_thong: normalizeKq(r.ket_qua_truyen_thong),
         ket_qua_chi_tiet:     r.ket_qua_chi_tiet,
       }));
-      window._histData[app][api.label] = mapped;
-      // Load stats song song không block
-      supaFetchHistory(app, api.label).then(hist => {
-        if (hist && hist.stats_json) {
-          window._statData[app][api.label] = { d: hist.stats_json.dung || 0, s: hist.stats_json.sai || 0 };
-          updateLobbyAccBadge(app);
-        }
-      });
-      const lr = mapped[mapped.length - 1];
-      if (lr) window._lastPhien[app][api.label] = lr.phien;
+      _dbg(`  ✅ fallback OK: ${histArr.length} phiên`);
     }
 
-    // Render lịch sử + KẾT QUẢ THỰC TẾ
+    // ── BƯỚC 3: Lưu vào state ──
+    window._histData[app][api.label] = histArr;
+    const lastRec = histArr[histArr.length - 1];
+    if (lastRec) window._lastPhien[app][api.label] = lastRec.phien;
+
+    // ── BƯỚC 4: Render lịch sử (14 chấm + KQ thực tế) ──
     renderHistBar(app, api);
     renderHubHist(app, api);
+    updateLobbyAccBadge(app);
+    _dbg(`  🎨 Render history: ${histArr.length} phiên`);
 
-    // Fetch dự đoán mới nhất
+    // ── BƯỚC 5: Lấy dự đoán từ tx_predictions_v2 (bot.py đẩy) ──
     const pred = await supaFetchLatestPred(app, api.label);
-    if (pred) supaRenderCloudPred(pred, app, api);
+    _dbg(`  tx_predictions_v2 →`, pred ? `du_doan=${pred.du_doan} conf=${pred.do_tin_cay}% phien=#${pred.phien}` : "NULL");
+
+    if (pred && pred.du_doan) {
+      // Có dự đoán từ cloud → dùng luôn (nguồn chính từ bot.py)
+      _dbg(`  ✅ Cloud pred: ${pred.du_doan} (${pred.do_tin_cay}%)`);
+      supaRenderCloudPred(pred, app, api);
+      // Lưu pending để track đúng/sai
+      window._pendingPred[app][api.label] = { pred: normalizeKq(pred.du_doan), pendingPhien: pred.phien };
+    } else {
+      // Không có dự đoán từ cloud → tính local bằng ensemble từ history
+      _dbg(`  ⚠️ Không có cloud pred → tính local ensemble`);
+      const results = histArr
+        .map(r => isXD ? normalizeKq(r.ket_qua_truyen_thong || r.ket_qua) : r.ket_qua)
+        .filter(r => r && lb.includes(r));
+      _dbg(`  📈 results cho ensemble: ${results.length} phiên hợp lệ (cần >= 5)`);
+      if (results.length >= 5) {
+        renderPred(app, api, null);
+      } else {
+        if (pb) pb.innerHTML = `<div class="pred-loading">
+          <span>⏳ Thu thập dữ liệu (${results.length}/5)...</span>
+          <small style="opacity:.6;display:block;margin-top:4px">Bot đang push data...</small>
+        </div>`;
+      }
+    }
 
   } catch(err) {
-    if (pb) pb.innerHTML = `<div class="pred-loading"><span>⚠️ Không kết nối được AI KING DZI</span></div>`;
-    console.error("[supaLoadFallback] loi:", err);
+    _dbg(`  ❌ EXCEPTION: ${err.message}`);
+    if (pb) pb.innerHTML = `<div class="pred-loading">
+      <span>⚠️ Lỗi kết nối Supabase</span>
+      <small style="opacity:.6;display:block;margin-top:4px">${err.message}</small>
+      <button onclick="doFetch()" style="margin-top:8px;padding:5px 14px;background:#7c3aed;border:none;border-radius:8px;color:#fff;cursor:pointer">🔄 Thử lại</button>
+    </div>`;
+    console.error("[supaLoadFallback]", err);
   }
 }
 
 // Hiển thị dự đoán lấy từ Supabase cloud
 function supaRenderCloudPred(pred, app, api) {
-  const RE_LOCAL = { "Tài":"🔴","Xỉu":"🔵","Chẵn":"🟢","Lẻ":"🟡" };
   const pb = document.getElementById("pred-body");
   if (!pb) return;
-  const emoji = RE_LOCAL[pred.du_doan] || "⬜";
+  // Normalize: bot.py lưu "Tai"/"Xiu" không dấu → normalize về có dấu
+  const duDoanRaw = pred.du_doan || "";
+  const duDoanDisplay = normalizeKq(duDoanRaw) || duDoanRaw;
+  const emoji = RE[duDoanDisplay] || RE[duDoanRaw] || "⬜";
+  _dbg(`supaRenderCloudPred: raw="${duDoanRaw}" display="${duDoanDisplay}" emoji="${emoji}"`);
   const barFilled = Math.round((pred.do_tin_cay || 0) / 10);
   const bar = "█".repeat(barFilled) + "░".repeat(10 - barFilled);
   const timeStr = new Date(pred.created_at).toLocaleTimeString("vi-VN");
   const nextPhien = pred.phien ? (parseInt(pred.phien) + 1) : "?";
   const appLabel = app && api ? app + "_" + api.label : "";
+
+  const conf = pred.do_tin_cay || 0;
+  const confColor = conf >= 70 ? "#22c55e" : conf >= 55 ? "#ffd700" : "#ef4444";
+  const cl = RCL[duDoanDisplay] || RCL[pred.du_doan] || "";
+  const st = window._statData[app]?.[api?.label] || { d: 0, s: 0 };
+  const acc = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "N/A";
 
   pb.innerHTML = `
     <div class="supa-pred-block">
@@ -1263,12 +1355,25 @@ function supaRenderCloudPred(pred, app, api) {
       </div>
       <div class="ai-typing-wrap"><div class="ai-typing-text" id="ai-typing-text"></div></div>
       <div class="supa-pred-badge">🤖 AI KING DZI</div>
-      <div class="pred-next-lbl">Dự đoán phiên sau là</div>
-      <div class="pred-next-num">#${nextPhien}</div>
-      <div class="dice-anim-row"><span class="dice-spin">🎲</span><span class="dice-spin" style="animation-delay:.15s">🎲</span><span class="dice-spin" style="animation-delay:.3s">🎲</span></div>
-      <div class="supa-pred-result">${emoji} <span>${pred.du_doan}</span></div>
-      <div class="supa-pred-bar">[${bar}] ${pred.do_tin_cay}%</div>
-      <div class="supa-pred-votes">🗳️ ${pred.votes}/${pred.total_methods} phương pháp</div>
+      <div class="pred-next-lbl">Dự đoán phiên #${nextPhien}</div>
+      <div class="pred-emoji-big spin-on-change">${emoji}</div>
+      <div class="pred-label ${cl}">${duDoanDisplay}</div>
+      <div class="conf-bar-wrap">
+        <div class="conf-bar-bg">
+          <div class="conf-bar-fill" style="width:${conf}%;background:linear-gradient(90deg,${confColor},${confColor}aa)"></div>
+        </div>
+        <div class="conf-pct-row">
+          <span>Độ tin cậy</span>
+          <span style="color:${confColor};font-weight:700">${conf}%</span>
+        </div>
+      </div>
+      <div class="pred-stats-row">
+        <div class="pred-stat"><div class="pred-stat-val" style="color:var(--accent)">${pred.votes || 0}/${pred.total_methods || 17}</div><div class="pred-stat-lbl">Đồng thuận</div></div>
+        <div class="pred-stat"><div class="pred-stat-val">${acc}</div><div class="pred-stat-lbl">Chính xác</div></div>
+        <div class="pred-stat"><div class="pred-stat-val" style="color:var(--green)">${st.d}</div><div class="pred-stat-lbl">✅ Đúng</div></div>
+        <div class="pred-stat"><div class="pred-stat-val" style="color:var(--tai)">${st.s}</div><div class="pred-stat-lbl">❌ Sai</div></div>
+      </div>
+      <div class="algo-badge">🧠 ${pred.total_methods || 17} thuật toán · Ensemble AI</div>
       <div class="supa-pred-time">⏰ ${timeStr}</div>
       <button class="open-hist-btn" onclick="openHistModal('${app}','${api ? api.label : ''}','${api ? api.type : ''}')">📋 Lịch Sử Dự Đoán</button>
     </div>`;
@@ -1295,12 +1400,17 @@ async function supaStartGameRealtime(app, api) {
     };
     if (!window._histData[app]?.[api.label]) return;
     window._histData[app][api.label].push(rec);
-    if (window._histData[app][api.label].length > 80) window._histData[app][api.label].shift();
+    if (window._histData[app][api.label].length > 100) window._histData[app][api.label].shift();
+    _dbg(`🔔 Realtime phiên mới #${row.phien} → ${actualKq} (total hist: ${window._histData[app][api.label].length})`);
 
     // So sánh dự đoán đang pending vs kết quả vừa về
     const pp = window._pendingPred[app]?.[api.label];
     if (pp && actualKq) {
-      const ok = pp.pred === actualKq;
+      // Đảm bảo cả 2 đã được normalize trước khi so sánh
+      const ppPredNorm = normalizeKq(pp.pred) || pp.pred;
+      const actualNorm = normalizeKq(actualKq) || actualKq;
+      const ok = ppPredNorm === actualNorm;
+      _dbg(`⚖️ Verdict: pred="${ppPredNorm}" vs actual="${actualNorm}" → ${ok ? "✅ ĐÚNG" : "❌ SAI"}`);
       if (!window._statData[app]) window._statData[app] = {};
       if (!window._statData[app][api.label]) window._statData[app][api.label] = { d: 0, s: 0 };
       if (ok) window._statData[app][api.label].d++;
@@ -1340,11 +1450,13 @@ async function supaStartGameRealtime(app, api) {
     // Lấy phiên hiện tại để track
     const hist = window._histData[app]?.[api.label] || [];
     const curPhien = hist.length > 0 ? hist[hist.length - 1].phien : row.phien;
-    window._pendingPred[app][api.label] = { pred: row.du_doan, pendingPhien: curPhien };
+    const predNorm = normalizeKq(row.du_doan) || row.du_doan;
+    window._pendingPred[app][api.label] = { pred: predNorm, pendingPhien: curPhien };
+    _dbg(`🔔 Realtime pred mới: raw="${row.du_doan}" norm="${predNorm}" conf=${row.do_tin_cay}%`);
     // TTS đọc dự đoán realtime
     if (window.TxTTS && row.du_doan && row.phien) {
       const nextP = parseInt(row.phien) + 1;
-      try { window.TxTTS.announcePredict(nextP, row.du_doan, app); } catch(e) {}
+      try { window.TxTTS.announcePredict(nextP, predNorm, app); } catch(e) {}
     }
     supaRenderCloudPred(row, app, api);
   });
@@ -1357,10 +1469,13 @@ function processData(data, app, api) {
   let verdict = null;
   const pp = window._pendingPred[app]?.[label];
   if (pp && actualKq) {
-    const ok = pp.pred === actualKq;
+    const ppNorm  = normalizeKq(pp.pred) || pp.pred;
+    const aqNorm  = normalizeKq(actualKq) || actualKq;
+    const ok = ppNorm === aqNorm;
+    _dbg(`⚖️ processData verdict: pred="${ppNorm}" actual="${aqNorm}" → ${ok ? "✅" : "❌"}`);
     if (ok) window._statData[app][label].d++;
     else    window._statData[app][label].s++;
-    verdict = { ok, pred: pp.pred, actual: actualKq };
+    verdict = { ok, pred: ppNorm, actual: aqNorm };
     window._pendingPred[app][label] = null;
     // Lưu vào predLog
     const logKey = app + "_" + label;
@@ -1378,7 +1493,8 @@ function processData(data, app, api) {
     const rec = { phien, ket_qua: data.ket_qua, tong: data.tong, xuc_xac_1: data.xuc_xac_1, xuc_xac_2: data.xuc_xac_2, xuc_xac_3: data.xuc_xac_3 };
     if (isXD) { rec.ket_qua_truyen_thong = data.ket_qua_truyen_thong; rec.ket_qua_chi_tiet = data.ket_qua_chi_tiet; }
     window._histData[app][label].push(rec);
-    if (window._histData[app][label].length > 80) window._histData[app][label].shift();
+    if (window._histData[app][label].length > 100) window._histData[app][label].shift();
+    _dbg(`📝 processData: phiên mới #${phien} ${actualKq} (total: ${window._histData[app][label].length})`);
   }
   renderPred(app, api, verdict);
   renderHistBar(app, api);
@@ -1393,7 +1509,11 @@ function renderHistBar(app, api) {
   const ph   = document.getElementById("pred-hist");
   const bar  = document.getElementById("pred-hist-bar");
   if (!hist.length) { ph?.classList.add("hidden"); return; }
-  ph?.classList.remove("hidden"); bar.innerHTML = "";
+  ph?.classList.remove("hidden");
+  // Cập nhật label header cho TX
+  const lbl = ph?.querySelector(".pred-hist-label");
+  if (lbl) lbl.textContent = isXD ? "Lịch sử Xóc Đĩa 14 phiên" : "Lịch sử 14 phiên";
+  bar.innerHTML = "";
   
   const recent = hist.slice(-14);
   const lb = isXD ? ["Chẵn","Lẻ"] : ["Tài","Xỉu"];
@@ -1443,21 +1563,22 @@ function renderHubHist(app, api) {
     return;
   }
   const recent = [...hist].reverse().slice(0, 30);
-  const FACE = { 1:"⚀", 2:"⚁", 3:"⚂", 4:"⚃", 5:"⚄", 6:"⚅" };
+  const FACE = { 1:"1", 2:"2", 3:"3", 4:"4", 5:"5", 6:"6" };
   let html = "";
   recent.forEach(r => {
     const kq = normalizeKq(isXD ? (r.ket_qua_truyen_thong || r.ket_qua) : r.ket_qua);
     const cl = RCL[kq] || "";
     const emoji = RE[kq] || "⬜";
-    const d1 = FACE[r.xuc_xac_1] || "🎲";
-    const d2 = FACE[r.xuc_xac_2] || "🎲";
-    const d3 = FACE[r.xuc_xac_3] || "🎲";
+    const d1 = r.xuc_xac_1 ? `<span class="dice-box">${r.xuc_xac_1}</span>` : "";
+    const d2 = r.xuc_xac_2 ? `<span class="dice-box">${r.xuc_xac_2}</span>` : "";
+    const d3 = r.xuc_xac_3 ? `<span class="dice-box">${r.xuc_xac_3}</span>` : "";
+    const diceHtml = (d1||d2||d3) ? (d1+d2+d3) : `<span style="opacity:.35;font-size:11px">—</span>`;
     const tong = r.tong ? `Tổng: ${r.tong}` : "";
     const detail = r.ket_qua_chi_tiet || "";
     html += `
     <div class="hub-hist-row ${cl}">
       <div class="hub-hist-phien">#${r.phien}</div>
-      <div class="hub-hist-dice">${d1}${d2}${d3}</div>
+      <div class="hub-hist-dice">${diceHtml}</div>
       <div class="hub-hist-kq">
         <span class="hub-kq-emoji">${emoji}</span>
         <span class="hub-kq-label">${kq || "?"}</span>
@@ -1628,6 +1749,17 @@ function buildAIReasoning(results, lb, best, conf, votes, total) {
 }
 
 // ── CALC EFFECT ────────────────────────────────────────────
+function toggleDebugPanel() {
+  const panel = document.getElementById("debug-panel");
+  if (!panel) return;
+  panel.classList.toggle("hidden");
+  // Refresh log khi mở
+  if (!panel.classList.contains("hidden")) {
+    const dp = document.getElementById("debug-panel-body");
+    if (dp) dp.innerHTML = _dbgLog.map(l => `<div class="dbg-line">${l}</div>`).join("");
+  }
+}
+
 function showCalcEffect() {
   const overlay = document.getElementById("calc-overlay");
   if (!overlay) return;
