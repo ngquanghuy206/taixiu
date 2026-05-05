@@ -172,5 +172,12 @@ const BRAND_GRADIENT = {
   bcr:      "linear-gradient(135deg,#9b59b6,#6c3483)",
 };
 
-const RE  = { "Tài":"🔴","Xỉu":"🔵","Chẵn":"🟢","Lẻ":"🟡","Cái":"🔴","Con":"🔵","Hòa":"🟡" };
-const RCL = { "Tài":"tai","Xỉu":"xiu","Chẵn":"chan","Lẻ":"le","Cái":"tai","Con":"xiu","Hòa":"hoa" };
+const RE  = { "Tài":"🔴","Xỉu":"🔵","Chẵn":"🟢","Lẻ":"🟡","Cái":"🔴","Con":"🔵","Hòa":"🟡",
+              "Tai":"🔴","Xiu":"🔵","Chan":"🟢","Le":"🟡","Cai":"🔴","Hoa":"🟡" };
+const RCL = { "Tài":"tai","Xỉu":"xiu","Chẵn":"chan","Lẻ":"le","Cái":"tai","Con":"xiu","Hòa":"hoa",
+              "Tai":"tai","Xiu":"xiu","Chan":"chan","Le":"le","Cai":"tai","Hoa":"hoa" };
+// Chuẩn hoá kết quả từ DB (Python lưu không dấu) → hiển thị có dấu
+function normalizeKq(kq) {
+  const map = {"Tai":"Tài","Xiu":"Xỉu","Chan":"Chẵn","Le":"Lẻ","Cai":"Cái","Hoa":"Hòa"};
+  return map[kq] || kq;
+}

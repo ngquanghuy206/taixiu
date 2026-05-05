@@ -340,21 +340,26 @@ async function doFetchBcr(app, banId) {
   // Thử fetch với retry (2 lần)
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
+      // Thử nhiều format ban ID: "C16", "16", "c16"
+      const banVariants = [banId, banId.replace(/^C/i,""), "C"+banId.replace(/^C/i,"")];
+      const banVariantsEnc = banVariants.map(b => encodeURIComponent(b)).join(",");
       const res = await fetch(
-        `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&ban=eq.${encodeURIComponent(banId)}&select=*&order=updated_at.desc&limit=1`,
+        `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&ban=in.(${banVariantsEnc})&select=*&order=updated_at.desc&limit=1`,
         { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
       );
       if (!res.ok) throw new Error("Supabase lỗi " + res.status);
       const rows = await res.json();
       const ban = rows?.[0];
       if (!ban) {
-        // Thử tìm không phân biệt hoa thường cho ban ID
+        // Fallback: lấy tất cả rồi tìm match
         const res2 = await fetch(
-          `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&select=ban,results_raw,good_road,du_doan_tiep,do_tin_cay,tong_phien,cai_count,con_count,hoa_count,updated_at&order=updated_at.desc&limit=1`,
+          `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&select=ban,results_raw,good_road,du_doan_tiep,do_tin_cay,tong_phien,cai_count,con_count,hoa_count,updated_at&order=updated_at.desc&limit=200`,
           { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
         );
         const rows2 = await res2.json();
-        const fallbackBan = rows2?.find(r => String(r.ban) === String(banId)) || rows2?.[0];
+        const fallbackBan = rows2?.find(r =>
+          banVariants.some(v => String(r.ban).toLowerCase() === String(v).toLowerCase())
+        );
         if (!fallbackBan) {
           if (pb) pb.innerHTML = `<div class="pred-loading">⏳ Bàn ${banId} chưa có dữ liệu — đang chờ bot cập nhật...</div>`;
           return;
@@ -819,6 +824,16 @@ async function openGame(app) {
   updateLobbyBtnLabel(app);
   openPred();
   closeSidebar();
+  // Clear UI cũ trước khi load sảnh mới
+  const pbClear = document.getElementById("pred-body");
+  const hubClear = document.getElementById("hub-hist-panel");
+  const barClear = document.getElementById("pred-hist-bar");
+  const phClear  = document.getElementById("pred-hist");
+  if (pbClear)  pbClear.innerHTML  = `<div class="pred-loading"><span>⏳ Đang tải dữ liệu...</span></div>`;
+  if (hubClear) hubClear.innerHTML = `<div class="hub-hist-empty">⏳ Đang chờ dữ liệu từ sảnh...</div>`;
+  if (barClear) barClear.innerHTML = "";
+  if (phClear)  phClear.classList.add("hidden");
+
   doFetch();
   clearInterval(window._fetchTimer);
   window._fetchTimer = setInterval(doFetch, 15000);
@@ -1083,6 +1098,15 @@ function buildApiTabs() {
 function switchApi(i) {
   window._curApiIdx = i;
   document.querySelectorAll(".api-tab").forEach((t, j) => t.classList.toggle("active", j === i));
+  // Clear UI cũ
+  const pbSw = document.getElementById("pred-body");
+  const hubSw = document.getElementById("hub-hist-panel");
+  const barSw = document.getElementById("pred-hist-bar");
+  const phSw  = document.getElementById("pred-hist");
+  if (pbSw)  pbSw.innerHTML  = `<div class="pred-loading"><span>⏳ Đang tải dữ liệu...</span></div>`;
+  if (hubSw) hubSw.innerHTML = `<div class="hub-hist-empty">⏳ Đang chờ dữ liệu từ sảnh...</div>`;
+  if (barSw) barSw.innerHTML = "";
+  if (phSw)  phSw.classList.add("hidden");
   // Restart realtime subscription cho api tab mới
   const app = window._curApp;
   if (app && APIS[app]?.[i]) {
@@ -1185,12 +1209,12 @@ async function supaLoadFallback(app, api) {
       // Map row tx_results_v2 → format nội bộ
       const mapped = rows.map(r => ({
         phien:                r.phien,
-        ket_qua:              r.ket_qua,
+        ket_qua:              normalizeKq(r.ket_qua),
         tong:                 r.tong,
         xuc_xac_1:            r.xuc_xac_1,
         xuc_xac_2:            r.xuc_xac_2,
         xuc_xac_3:            r.xuc_xac_3,
-        ket_qua_truyen_thong: r.ket_qua_truyen_thong,
+        ket_qua_truyen_thong: normalizeKq(r.ket_qua_truyen_thong),
         ket_qua_chi_tiet:     r.ket_qua_chi_tiet,
       }));
       window._histData[app][api.label] = mapped;
@@ -1262,9 +1286,9 @@ async function supaStartGameRealtime(app, api) {
     if (window._lastPhien[app]?.[api.label] === row.phien) return;
     window._lastPhien[app][api.label] = row.phien;
     const isXD = api.type === "xocdia";
-    const actualKq = isXD ? row.ket_qua_truyen_thong : row.ket_qua;
+    const actualKq = normalizeKq(isXD ? row.ket_qua_truyen_thong : row.ket_qua);
     const rec = {
-      phien: row.phien, ket_qua: row.ket_qua, tong: row.tong,
+      phien: row.phien, ket_qua: normalizeKq(row.ket_qua), tong: row.tong,
       xuc_xac_1: row.xuc_xac_1, xuc_xac_2: row.xuc_xac_2, xuc_xac_3: row.xuc_xac_3,
       ket_qua_truyen_thong: row.ket_qua_truyen_thong,
       ket_qua_chi_tiet: row.ket_qua_chi_tiet,
@@ -1360,7 +1384,7 @@ function processData(data, app, api) {
   renderHistBar(app, api);
 }
 
-function getKq(r, isXD) { return isXD ? r.ket_qua_truyen_thong : r.ket_qua; }
+function getKq(r, isXD) { const raw = isXD ? r.ket_qua_truyen_thong : r.ket_qua; return normalizeKq(raw); }
 
 // ── RENDER HISTORY BAR ─────────────────────────────────────
 function renderHistBar(app, api) {
@@ -1422,7 +1446,7 @@ function renderHubHist(app, api) {
   const FACE = { 1:"⚀", 2:"⚁", 3:"⚂", 4:"⚃", 5:"⚄", 6:"⚅" };
   let html = "";
   recent.forEach(r => {
-    const kq = isXD ? (r.ket_qua_truyen_thong || r.ket_qua) : r.ket_qua;
+    const kq = normalizeKq(isXD ? (r.ket_qua_truyen_thong || r.ket_qua) : r.ket_qua);
     const cl = RCL[kq] || "";
     const emoji = RE[kq] || "⬜";
     const d1 = FACE[r.xuc_xac_1] || "🎲";
@@ -1450,7 +1474,7 @@ function renderPred(app, api, verdict) {
   const isXD    = api.type === "xocdia";
   const hist    = window._histData[app]?.[api.label] || [];
   const lb      = isXD ? ["Chẵn", "Lẻ"] : ["Tài", "Xỉu"];
-  const results = hist.map(r => getKq(r, isXD)).filter(r => lb.includes(r));
+  const results = hist.map(r => getKq(r, isXD)).filter(r => r && lb.includes(r));
   const st      = window._statData[app]?.[api.label] || { d: 0, s: 0 };
   const streak  = calcStreak(results);
   const pb      = document.getElementById("pred-body");
