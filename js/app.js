@@ -490,9 +490,8 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
   if (!pb) return;
   const lb = ["Cái", "Con"];
   const rl = fullSeq.filter(k => lb.includes(k));
-  const _epFn = typeof ensemblePredict === "function" ? ensemblePredict : (typeof window.ensemblePredict === "function" ? window.ensemblePredict : null);
-  const { best, conf, votes, total } = (rl.length >= 5 && _epFn)
-    ? _epFn(rl, lb)
+  const { best, conf, votes, total } = (rl.length >= 5)
+    ? (typeof window.ensemblePredict === "function" ? window.ensemblePredict(rl, lb) : (typeof ensemblePredict === "function" ? ensemblePredict(rl, lb) : { best: null, conf: 0, votes: 0, total: 0 }))
     : { best: null, conf: 0, votes: 0, total: 0 };
 
   const st = window._statData[app]?.[api.label] || { d: 0, s: 0 };
@@ -509,11 +508,7 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
   const conPct = total_p > 0 ? Math.round(con/total_p*100) : 0;
   const gameName = api.label || "Baccarat Sexy";
 
-  // Nếu ensemble không đủ data → dùng du_doan_tiep từ Supabase (bot.py đã tính)
-  const cloudBest = best || (ban.du_doan_tiep ? (ban.du_doan_tiep === "Cai" ? "Cái" : ban.du_doan_tiep === "Con" ? "Con" : ban.du_doan_tiep) : null);
-  const cloudConf = best ? conf : (ban.do_tin_cay || 0);
-
-  if (!cloudBest) {
+  if (!best) {
     pb.innerHTML = `
       <div class="supa-pred-badge">🎴 Bàn ${banId} — ${gameName}</div>
       <div class="bcr-quick-stats">
@@ -522,11 +517,11 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
         <div class="bcr-qs-sep">|</div>
         <div class="bcr-qs-item"><span>📊</span><strong>${total_p} phiên</strong></div>
       </div>
-      <div class="pred-loading"><span>⏳ Thu thập dữ liệu (${rl.length}/5)...</span></div>`;
+      <div class="pred-loading"><span>Thu thập dữ liệu (${rl.length}/5)...</span></div>`;
     return;
   }
-  const cl  = RCL[cloudBest] || "";
-  const confColor = cloudConf >= 70 ? "#22c55e" : cloudConf >= 55 ? "#ffd700" : "#ef4444";
+  const cl  = RCL[best] || "";
+  const confColor = conf >= 70 ? "#22c55e" : conf >= 55 ? "#ffd700" : "#ef4444";
   const nextPhien = fullSeq.length + 1;
 
   pb.innerHTML = `
@@ -538,15 +533,15 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
     </div>
     <div class="bcr-road-tag">🛤️ Đường đi: <strong>${road || "—"}</strong></div>
     <div class="pred-next-lbl">Dự đoán phiên #${nextPhien}</div>
-    <div class="pred-emoji-big spin-on-change">${RE[cloudBest] || "?"}</div>
-    <div class="pred-label ${cl}">${cloudBest}</div>
+    <div class="pred-emoji-big spin-on-change">${RE[best] || "?"}</div>
+    <div class="pred-label ${cl}">${best}</div>
     <div class="conf-bar-wrap">
       <div class="conf-bar-bg">
-        <div class="conf-bar-fill" style="width:${cloudConf}%;background:linear-gradient(90deg,${confColor},${confColor}aa)"></div>
+        <div class="conf-bar-fill" style="width:${conf}%;background:linear-gradient(90deg,${confColor},${confColor}aa)"></div>
       </div>
       <div class="conf-pct-row">
         <span>Độ tin cậy</span>
-        <span style="color:${confColor};font-weight:700">${cloudConf}%</span>
+        <span style="color:${confColor};font-weight:700">${conf}%</span>
       </div>
     </div>
     <div class="pred-stats-row">
@@ -1208,96 +1203,61 @@ async function doFetch() {
 //  LOAD DATA + DỰ ĐOÁN — Nguồn chính: tx_history_v2 (bot.py)
 //  Flow: history_json (100 phiên) → ensemble predict → render
 // ══════════════════════════════════════════════════════════
-function _dbg(msg, data) {
-  // debug logging removed for production
-}
+function _dbg() {}
 
 async function supaLoadFallback(app, api) {
   const pb = document.getElementById("pred-body");
-  const isXD = api.type === "xocdia";
-  const lb   = isXD ? ["Chẵn","Lẻ"] : ["Tài","Xỉu"];
-  const lbRaw = isXD ? ["Chan","Le"] : ["Tai","Xiu"]; // bot lưu không dấu
-
-  _dbg(`⏳ Load [${app}|${api.label}]`);
-
   try {
-    // ── BƯỚC 1: Lấy toàn bộ history từ tx_history_v2 (nguồn ưu tiên) ──
-    // Bot.py upsert history_json (deque 100 phiên) + stats_json vào đây
-    const histRow = await supaFetchHistory(app, api.label);
-    _dbg(`  tx_history_v2 →`, histRow ? `${histRow.history_json?.length || 0} phiên, stats=${JSON.stringify(histRow.stats_json)}` : "NULL");
+    // B1: Lấy history từ tx_history_v2
+    const hist = await supaFetchHistory(app, api.label);
+    const hasHist = hist && hist.history_json && hist.history_json.length > 0;
 
-    let histArr = [];
-    if (histRow && Array.isArray(histRow.history_json) && histRow.history_json.length > 0) {
-      // Normalize ket_qua: bot lưu "Tai"→"Tài", "Xiu"→"Xỉu", v.v.
-      histArr = histRow.history_json.map(r => ({
-        phien:                r.phien,
-        ket_qua:              normalizeKq(r.ket_qua),
-        tong:                 r.tong,
-        xuc_xac_1:            r.xuc_xac_1,
-        xuc_xac_2:            r.xuc_xac_2,
-        xuc_xac_3:            r.xuc_xac_3,
-        ket_qua_truyen_thong: normalizeKq(r.ket_qua_truyen_thong || r.ket_qua),
-        ket_qua_chi_tiet:     r.ket_qua_chi_tiet || "",
-      }));
-      _dbg(`  ✅ history_json OK: ${histArr.length} phiên, phiên cuối = #${histArr[histArr.length-1]?.phien}`);
-
-      // Lưu stats từ bot.py (đây là nguồn chính xác nhất)
-      if (histRow.stats_json) {
-        window._statData[app][api.label] = {
-          d: histRow.stats_json.dung || 0,
-          s: histRow.stats_json.sai  || 0
-        };
-        _dbg(`  📊 stats: đúng=${histRow.stats_json.dung} sai=${histRow.stats_json.sai}`);
-      }
-    } else {
-      // ── BƯỚC 2: Fallback → tx_results_v2 (từng phiên INSERT từ bot) ──
-      _dbg(`  ⚠️ history_json trống → fallback tx_results_v2`);
+    if (!hasHist) {
+      // Fallback: tx_results_v2
       const rows = await supaFetchResults(app, api.label, 100);
-      _dbg(`  tx_results_v2 →`, `${rows?.length || 0} rows`);
-
       if (!rows || rows.length === 0) {
-        _dbg(`  ❌ Không có data từ cả 2 nguồn`);
-        if (pb) pb.innerHTML = `<div class="pred-loading">
-          <span>⏳ Bot chưa đẩy dữ liệu lên</span>
-          <small style="opacity:.6;display:block;margin-top:4px">Kiểm tra bot.py đang chạy chưa?</small>
-          <button onclick="doFetch()" style="margin-top:8px;padding:5px 14px;background:#7c3aed;border:none;border-radius:8px;color:#fff;cursor:pointer">🔄 Thử lại</button>
-        </div>`;
+        if (pb) pb.innerHTML = `<div class="pred-loading"><span>⏳ Bot chưa đẩy dữ liệu lên</span><br><small style="opacity:.6">Kiểm tra tool đang chạy chưa?</small><br><button onclick="doFetch()" style="margin-top:8px;padding:5px 14px;background:#7c3aed;border:none;border-radius:8px;color:#fff;cursor:pointer">🔄 Thử lại</button></div>`;
         return;
       }
-
-      histArr = rows.map(r => ({
-        phien:                r.phien,
-        ket_qua:              normalizeKq(r.ket_qua),
-        tong:                 r.tong,
-        xuc_xac_1:            r.xuc_xac_1,
-        xuc_xac_2:            r.xuc_xac_2,
-        xuc_xac_3:            r.xuc_xac_3,
-        ket_qua_truyen_thong: normalizeKq(r.ket_qua_truyen_thong),
-        ket_qua_chi_tiet:     r.ket_qua_chi_tiet,
+      window._histData[app][api.label] = rows.map(r => ({
+        phien: r.phien,
+        ket_qua: normalizeKq(r.ket_qua),
+        tong: r.tong,
+        xuc_xac_1: r.xuc_xac_1, xuc_xac_2: r.xuc_xac_2, xuc_xac_3: r.xuc_xac_3,
+        ket_qua_truyen_thong: normalizeKq(r.ket_qua_truyen_thong || r.ket_qua),
+        ket_qua_chi_tiet: r.ket_qua_chi_tiet || "",
       }));
-      _dbg(`  ✅ fallback OK: ${histArr.length} phiên`);
+    } else {
+      window._histData[app][api.label] = hist.history_json.map(r => ({
+        phien: r.phien,
+        ket_qua: normalizeKq(r.ket_qua),
+        tong: r.tong,
+        xuc_xac_1: r.xuc_xac_1, xuc_xac_2: r.xuc_xac_2, xuc_xac_3: r.xuc_xac_3,
+        ket_qua_truyen_thong: normalizeKq(r.ket_qua_truyen_thong || r.ket_qua),
+        ket_qua_chi_tiet: r.ket_qua_chi_tiet || "",
+      }));
+      if (hist.stats_json) {
+        window._statData[app][api.label] = {
+          d: hist.stats_json.dung || 0,
+          s: hist.stats_json.sai  || 0
+        };
+      }
     }
 
-    // ── BƯỚC 3: Lưu vào state ──
-    window._histData[app][api.label] = histArr;
+    const histArr = window._histData[app][api.label] || [];
     const lastRec = histArr[histArr.length - 1];
     if (lastRec) window._lastPhien[app][api.label] = lastRec.phien;
 
-    // ── BƯỚC 4: Render lịch sử (14 chấm + KQ thực tế) ──
+    // B2: Render lịch sử
     renderHistBar(app, api);
     renderHubHist(app, api);
     updateLobbyAccBadge(app);
-    _dbg(`  🎨 Render history: ${histArr.length} phiên`);
 
-    // ── BƯỚC 5: Lấy dự đoán từ tx_predictions_v2 (bot.py đẩy) ──
-    const pred = await supaFetchLatestPred(app, api.label);
-    _dbg(`  tx_predictions_v2 →`, pred ? `du_doan=${pred.du_doan} conf=${pred.do_tin_cay}% phien=#${pred.phien}` : "NULL");
-
-    // ── BƯỚC 6: Fetch verdicts → restore stats đúng/sai sau reload ──
+    // B3: Restore verdicts → stats đúng/sai sau reload
     try {
       const vRes = await fetch(
-        `${SUPA_URL}/rest/v1/${DB_TABLES.verdicts}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(api.label)}&order=created_at.desc&limit=100&select=phien,du_doan,ket_qua_thuc_te,dung,created_at`,
-        { headers: SUPA_HEADERS }
+        `${SUPA_URL}/rest/v1/${DB_TABLES.verdicts}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(api.label)}&order=created_at.desc&limit=100&select=phien,du_doan,ket_qua_thuc_te,dung`,
+        { headers: _SH() }
       );
       if (vRes.ok) {
         const verdicts = await vRes.json();
@@ -1305,94 +1265,69 @@ async function supaLoadFallback(app, api) {
           const logKey = app + "_" + api.label;
           if (!window._predLog) window._predLog = {};
           window._predLog[logKey] = [...verdicts].reverse().map(v => ({
-            phien: v.phien, pred: normalizeKq(v.du_doan),
-            actual: normalizeKq(v.ket_qua_thuc_te), ok: v.dung
+            phien: v.phien,
+            pred:   normalizeKq(v.du_doan),
+            actual: normalizeKq(v.ket_qua_thuc_te),
+            ok:     v.dung
           }));
-          // Chỉ update stats nếu chưa có từ history_json
-          if (!histRow || !histRow.stats_json) {
-            const d = verdicts.filter(v => v.dung).length;
-            const s = verdicts.filter(v => !v.dung).length;
-            window._statData[app][api.label] = { d, s };
+          if (!hasHist || !hist.stats_json) {
+            window._statData[app][api.label] = {
+              d: verdicts.filter(v => v.dung).length,
+              s: verdicts.filter(v => !v.dung).length,
+            };
           }
-          _dbg(`  📋 verdicts: ${verdicts.length} lịch sử đúng/sai loaded`);
         }
       }
-    } catch(ve) { _dbg(`  ⚠️ verdicts lỗi: ${ve.message}`); }
+    } catch(ve) {}
 
+    // B4: Lấy và hiển thị dự đoán từ cloud
+    const pred = await supaFetchLatestPred(app, api.label);
     if (pred && pred.du_doan) {
-      // Có dự đoán từ cloud → dùng luôn (nguồn chính từ bot.py)
-      _dbg(`  ✅ Cloud pred: ${pred.du_doan} (${pred.do_tin_cay}%)`);
       supaRenderCloudPred(pred, app, api);
-      // Lưu pending để track đúng/sai
-      window._pendingPred[app][api.label] = { pred: normalizeKq(pred.du_doan), pendingPhien: pred.phien };
+      window._pendingPred[app][api.label] = {
+        pred: normalizeKq(pred.du_doan),
+        pendingPhien: pred.phien
+      };
     } else {
-      // Không có dự đoán từ cloud → tính local bằng ensemble từ history
-      const results = histArr
-        .map(r => {
-          const kq = isXD ? normalizeKq(r.ket_qua_truyen_thong || r.ket_qua) : normalizeKq(r.ket_qua);
-          return kq;
-        })
-        .filter(r => r && lb.includes(r));
-      if (results.length >= 5) {
-        renderPred(app, api, null);
-      } else if (histArr.length > 0) {
-        // Có data nhưng chưa đủ 5 kết quả hợp lệ → vẫn cố render
-        renderPred(app, api, null);
-      } else {
-        if (pb) pb.innerHTML = `<div class="pred-loading">
-          <span>⏳ Bot chưa đẩy dữ liệu lên</span>
-          <small style="opacity:.6;display:block;margin-top:4px">Kiểm tra tool đang chạy chưa?</small>
-          <button onclick="doFetch()" style="margin-top:8px;padding:5px 14px;background:#7c3aed;border:none;border-radius:8px;color:#fff;cursor:pointer">🔄 Thử lại</button>
-        </div>`;
-      }
+      // Không có cloud pred → tính local ensemble
+      renderPred(app, api, null);
     }
 
   } catch(err) {
-    _dbg(`  ❌ EXCEPTION: ${err.message}`);
-    if (pb) pb.innerHTML = `<div class="pred-loading">
-      <span>⚠️ Lỗi kết nối Supabase</span>
-      <small style="opacity:.6;display:block;margin-top:4px">${err.message}</small>
-      <button onclick="doFetch()" style="margin-top:8px;padding:5px 14px;background:#7c3aed;border:none;border-radius:8px;color:#fff;cursor:pointer">🔄 Thử lại</button>
-    </div>`;
+    if (pb) pb.innerHTML = `<div class="pred-loading"><span>⚠️ Lỗi kết nối</span><br><small style="opacity:.6">${err.message}</small><br><button onclick="doFetch()" style="margin-top:8px;padding:5px 14px;background:#7c3aed;border:none;border-radius:8px;color:#fff;cursor:pointer">🔄 Thử lại</button></div>`;
     console.error("[supaLoadFallback]", err);
   }
 }
 
-// Hiển thị dự đoán lấy từ Supabase cloud
+// Hiển thị dự đoán từ Supabase cloud
 function supaRenderCloudPred(pred, app, api) {
   const pb = document.getElementById("pred-body");
   if (!pb) return;
-  // Normalize: bot.py lưu "Tai"/"Xiu" không dấu → normalize về có dấu
-  const duDoanRaw = pred.du_doan || "";
-  const duDoanDisplay = normalizeKq(duDoanRaw) || duDoanRaw;
-  const emoji = RE[duDoanDisplay] || RE[duDoanRaw] || "⬜";
-  _dbg(`supaRenderCloudPred: raw="${duDoanRaw}" display="${duDoanDisplay}" emoji="${emoji}"`);
-  const barFilled = Math.round((pred.do_tin_cay || 0) / 10);
-  const bar = "█".repeat(barFilled) + "░".repeat(10 - barFilled);
-  const timeStr = new Date(pred.created_at).toLocaleTimeString("vi-VN");
-  const nextPhien = pred.phien ? (parseInt(pred.phien) + 1) : "?";
-  const appLabel = app && api ? app + "_" + api.label : "";
-
-  const conf = pred.do_tin_cay || 0;
+  const rawDuDoan = pred.du_doan || "";
+  const duDoan    = normalizeKq(rawDuDoan) || rawDuDoan;
+  const emoji     = RE[duDoan] || "⬜";
+  const cl        = RCL[duDoan] || "";
+  const conf      = pred.do_tin_cay || 0;
   const confColor = conf >= 70 ? "#22c55e" : conf >= 55 ? "#ffd700" : "#ef4444";
-  const cl = RCL[duDoanDisplay] || RCL[pred.du_doan] || "";
-  const st = window._statData[app]?.[api?.label] || { d: 0, s: 0 };
-  const acc = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "N/A";
+  const nextPhien = pred.phien ? (parseInt(pred.phien) + 1) : "?";
+  const timeStr   = pred.created_at ? new Date(pred.created_at).toLocaleTimeString("vi-VN") : "";
+  const st        = window._statData[app]?.[api?.label] || { d: 0, s: 0 };
+  const acc       = (st.d + st.s > 0) ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "—";
 
   pb.innerHTML = `
     <div class="supa-pred-block">
       <div class="robot-gif-wrap">
-        <img src="https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" class="robot-gif" alt="AI Robot"
+        <img src="https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif" class="robot-gif" alt="AI"
           onerror="this.src='https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif'"/>
       </div>
       <div class="ai-typing-wrap"><div class="ai-typing-text" id="ai-typing-text"></div></div>
       <div class="supa-pred-badge">🤖 AI KING DZI</div>
       <div class="pred-next-lbl">Dự đoán phiên #${nextPhien}</div>
       <div class="pred-emoji-big spin-on-change">${emoji}</div>
-      <div class="pred-label ${cl}">${duDoanDisplay}</div>
+      <div class="pred-label ${cl}">${duDoan}</div>
       <div class="conf-bar-wrap">
         <div class="conf-bar-bg">
-          <div class="conf-bar-fill" style="width:${conf}%;background:linear-gradient(90deg,${confColor},${confColor}aa)"></div>
+          <div class="conf-bar-fill" style="width:${conf}%;background:linear-gradient(90deg,${confColor},${confColor}88)"></div>
         </div>
         <div class="conf-pct-row">
           <span>Độ tin cậy</span>
@@ -1400,16 +1335,27 @@ function supaRenderCloudPred(pred, app, api) {
         </div>
       </div>
       <div class="pred-stats-row">
-        <div class="pred-stat"><div class="pred-stat-val" style="color:var(--accent)">${pred.votes || 0}/${pred.total_methods || 17}</div><div class="pred-stat-lbl">Đồng thuận</div></div>
-        <div class="pred-stat"><div class="pred-stat-val">${acc}</div><div class="pred-stat-lbl">Chính xác</div></div>
-        <div class="pred-stat"><div class="pred-stat-val" style="color:var(--green)">${st.d}</div><div class="pred-stat-lbl">✅ Đúng</div></div>
-        <div class="pred-stat"><div class="pred-stat-val" style="color:var(--tai)">${st.s}</div><div class="pred-stat-lbl">❌ Sai</div></div>
+        <div class="pred-stat">
+          <div class="pred-stat-val" style="color:var(--accent)">${pred.votes || 0}/${pred.total_methods || 17}</div>
+          <div class="pred-stat-lbl">Đồng thuận</div>
+        </div>
+        <div class="pred-stat">
+          <div class="pred-stat-val">${acc}</div>
+          <div class="pred-stat-lbl">Chính xác</div>
+        </div>
+        <div class="pred-stat">
+          <div class="pred-stat-val" style="color:var(--green)">${st.d}</div>
+          <div class="pred-stat-lbl">✅ Đúng</div>
+        </div>
+        <div class="pred-stat">
+          <div class="pred-stat-val" style="color:var(--tai)">${st.s}</div>
+          <div class="pred-stat-lbl">❌ Sai</div>
+        </div>
       </div>
       <div class="algo-badge">🧠 ${pred.total_methods || 17} thuật toán · Ensemble AI</div>
       <div class="supa-pred-time">⏰ ${timeStr}</div>
       <button class="open-hist-btn" onclick="openHistModal('${app}','${api ? api.label : ''}','${api ? api.type : ''}')">📋 Lịch Sử Dự Đoán</button>
     </div>`;
-  // Khởi động typing animation "đang suy nghĩ"
   startAITyping("thinking");
 }
 
@@ -1661,8 +1607,8 @@ function renderPred(app, api, verdict) {
     return;
   }
 
-  if (typeof ensemblePredict !== "function" && typeof window.ensemblePredict !== "function") { if (pb) pb.innerHTML = "<div class=\"pred-loading\">⚠️ Lỗi tải thuật toán AI. Vui lòng tải lại trang!</div>"; return; }
-  const _ep = typeof ensemblePredict === "function" ? ensemblePredict : window.ensemblePredict;
+    const _ep = typeof ensemblePredict === "function" ? ensemblePredict : (typeof window.ensemblePredict === "function" ? window.ensemblePredict : null);
+  if (!_ep) { if (pb) pb.innerHTML = "<div class=\"pred-loading\">⚠️ Lỗi tải thuật toán AI. Vui lòng tải lại trang!</div>"; return; }
   const { best, conf, votes, total, topM, topAcc } = _ep(results, lb);
   if (!best) { pb.innerHTML = `${verdictHtml}<div class="pred-loading">Không đủ dữ liệu</div>`; return; }
 

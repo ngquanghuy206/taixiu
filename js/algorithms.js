@@ -4,7 +4,6 @@
 // ═══════════════════════════════════════════════════════════
 
 // ─── UTILS ───────────────────────────────────────────────────
-
 function norm(sc,lb){const t=lb.reduce((a,l)=>a+(sc[l]||0),0)||1;const r={};lb.forEach(l=>r[l]=(sc[l]||0)/t);return r}
 function half(lb){const r={};lb.forEach(l=>r[l]=0.5);return r}
 
@@ -652,7 +651,7 @@ function ensemblePredict(results, lb) {
   return { best, conf, votes: voteBest, total: names.length, topM, topAcc, btAcc };
 }
 
-// ─── EXPORT TO WINDOW (đảm bảo accessible từ mọi script) ─────
+// ─── EXPORT TO WINDOW (đảm bảo accessible cross-script) ──
 if (typeof window !== 'undefined') {
   window.ensemblePredict = ensemblePredict;
   window.METHODS         = METHODS;
