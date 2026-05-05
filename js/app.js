@@ -134,21 +134,33 @@ async function openBcrTablePicker(app) {
   if (loading) loading.style.display = "flex";
 
   try {
-    const api = APIS[app]?.[0];
-    if (!api) throw new Error("No API for BCR");
-
-    // Fetch dữ liệu baccarat
-    const res = await fetch(api.url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error("API lỗi " + res.status);
-    const raw = await res.json();
-    const tables = Array.isArray(raw) ? raw : (raw.data || []);
-    window._bcrTablesData = tables;
+    // Load từ Supabase bcr_results_v2 thay vì gọi API trực tiếp (tránh CORS)
+    const res = await fetch(
+      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&select=ban,ket_qua_moi_nhat,tong_phien,cai_count,con_count,hoa_count,good_road,results_raw,du_doan_tiep,do_tin_cay,updated_at&order=ban.asc`,
+      { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
+    );
+    if (!res.ok) throw new Error("Supabase lỗi " + res.status);
+    const rows = await res.json();
 
     if (loading) loading.style.display = "none";
-    if (!tables.length) {
+    if (!rows || !rows.length) {
       if (grid) grid.innerHTML = '<div class="bcr-empty">Không có bàn nào đang hoạt động</div>';
       return;
     }
+
+    // Convert supabase rows → tables format
+    const tables = rows.map(r => ({
+      ban: r.ban,
+      results: r.results_raw || "",
+      good_road: r.good_road || "",
+      du_doan_tiep: r.du_doan_tiep || "",
+      do_tin_cay: r.do_tin_cay || 0,
+      tong_phien: r.tong_phien || 0,
+      cai_count: r.cai_count || 0,
+      con_count: r.con_count || 0,
+      hoa_count: r.hoa_count || 0,
+    }));
+    window._bcrTablesData = tables;
     renderBcrTableGrid(tables, grid);
   } catch(e) {
     if (loading) loading.style.display = "none";
@@ -161,17 +173,20 @@ function renderBcrTableGrid(tables, grid) {
   grid.innerHTML = "";
   tables.forEach(ban => {
     const banId   = ban.ban || ban.id || "?";
-    const results = ban.results || "";
+    const results = ban.results || ban.results_raw || "";
     const road    = ban.good_road || "";
     const seq     = [...results].filter(c => "PBT".includes(c));
-    const total   = seq.length;
-    const cai     = results.split("B").length - 1;
-    const con     = results.split("P").length - 1;
-    const hoa     = results.split("T").length - 1;
+    const total   = ban.tong_phien || seq.length;
+    // Use pre-computed counts from Supabase if available
+    const cai     = ban.cai_count !== undefined ? ban.cai_count : (results.split("B").length - 1);
+    const con     = ban.con_count !== undefined ? ban.con_count : (results.split("P").length - 1);
+    const hoa     = ban.hoa_count !== undefined ? ban.hoa_count : (results.split("T").length - 1);
     const caiPct  = total > 0 ? Math.round(cai / total * 100) : 0;
     const conPct  = total > 0 ? Math.round(con / total * 100) : 0;
     const hoaPct  = total > 0 ? Math.round(hoa / total * 100) : 0;
-    const lastKq  = seq.length > 0 ? {"P":"Con","B":"Cái","T":"Hòa"}[seq[seq.length-1]] || "?" : "?";
+    // Python stores "Cai"/"Con"/"Hoa" — normalize to display
+    const kqRaw   = ban.ket_qua_moi_nhat || (seq.length > 0 ? {"P":"Con","B":"Cái","T":"Hòa"}[seq[seq.length-1]] : "?");
+    const lastKq  = {"Cai":"Cái","Con":"Con","Hoa":"Hòa"}[kqRaw] || kqRaw || "?";
     const lastEmoji = RE[lastKq] || "⬜";
     const lastCl  = RCL[lastKq] || "";
 
@@ -181,6 +196,14 @@ function renderBcrTableGrid(tables, grid) {
       return `<span class="bcr-dot ${RCL[k]||""}">${RE[k]||"?"}</span>`;
     }).join("");
 
+    // AI prediction badge
+    const predRaw = ban.du_doan_tiep || "";
+    const predDisp = {"Cai":"Cái","Con":"Con","Hoa":"Hòa"}[predRaw] || predRaw;
+    const predConf = ban.do_tin_cay || 0;
+    const predHtml = predDisp
+      ? `<div class="bcr-table-pred">${RE[predDisp]||"🤖"} Dự đoán: <strong>${predDisp}</strong> <span style="opacity:.7">(${predConf}%)</span></div>`
+      : "";
+
     const card = document.createElement("div");
     card.className = "bcr-table-card";
     card.dataset.banId = banId;
@@ -189,12 +212,13 @@ function renderBcrTableGrid(tables, grid) {
         <div class="bcr-table-num">Bàn ${banId}</div>
         <div class="bcr-table-kq ${lastCl}">${lastEmoji} ${lastKq}</div>
       </div>
-      <div class="bcr-table-recent">${recent8}</div>
+      <div class="bcr-table-recent">${recent8 || "<span style='opacity:.4'>Chưa có dữ liệu</span>"}</div>
       <div class="bcr-table-stats">
         <div class="bcr-stat-item tai"><span>🔴 Cái</span><strong>${caiPct}%</strong><small>(${cai})</small></div>
         <div class="bcr-stat-item xiu"><span>🔵 Con</span><strong>${conPct}%</strong><small>(${con})</small></div>
         <div class="bcr-stat-item hoa"><span>🟡 Hòa</span><strong>${hoaPct}%</strong><small>(${hoa})</small></div>
       </div>
+      ${predHtml}
       <div class="bcr-table-road">🛤️ ${road || "—"}</div>
       <div class="bcr-table-total">📊 ${total} phiên</div>
       <button class="bcr-enter-btn" onclick="enterBcrTable('${banId}')">Vào Bàn ${banId} →</button>
@@ -259,14 +283,17 @@ async function doFetchBcr(app, banId) {
   if (!api) return;
   const pb = document.getElementById("pred-body");
   try {
-    const res = await fetch(api.url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) throw new Error("API lỗi");
-    const raw = await res.json();
-    const tables = Array.isArray(raw) ? raw : (raw.data || []);
-    const ban = tables.find(b => String(b.ban) === String(banId) || String(b.id) === String(banId));
+    // Load từ Supabase bcr_results_v2 — tránh CORS khi gọi API trực tiếp
+    const res = await fetch(
+      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&ban=eq.${encodeURIComponent(banId)}&select=*&limit=1`,
+      { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
+    );
+    if (!res.ok) throw new Error("Supabase lỗi " + res.status);
+    const rows = await res.json();
+    const ban = rows?.[0];
     if (!ban) { if (pb) pb.innerHTML = `<div class="pred-loading">⚠️ Không tìm thấy bàn ${banId}</div>`; return; }
 
-    const results = ban.results || "";
+    const results = ban.results_raw || "";
     const road    = ban.good_road || "";
     const seq     = [...results].filter(c => "PBT".includes(c));
     const kqMap   = {"P":"Con","B":"Cái","T":"Hòa"};
@@ -330,16 +357,19 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
   const acc = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "N/A";
   const lastKq = fullSeq[fullSeq.length - 1] || "?";
   const banId  = ban.ban || ban.id;
-  const cai  = (ban.results || "").split("B").length - 1;
-  const con  = (ban.results || "").split("P").length - 1;
-  const hoa  = (ban.results || "").split("T").length - 1;
-  const total_p = fullSeq.length;
+  // Use pre-computed counts from Supabase if available
+  const rawStr = ban.results_raw || ban.results || "";
+  const cai  = ban.cai_count !== undefined ? ban.cai_count : (rawStr.split("B").length - 1);
+  const con  = ban.con_count !== undefined ? ban.con_count : (rawStr.split("P").length - 1);
+  const hoa  = ban.hoa_count !== undefined ? ban.hoa_count : (rawStr.split("T").length - 1);
+  const total_p = ban.tong_phien || fullSeq.length;
   const caiPct = total_p > 0 ? Math.round(cai/total_p*100) : 0;
   const conPct = total_p > 0 ? Math.round(con/total_p*100) : 0;
+  const gameName = api.label || "Baccarat Sexy";
 
   if (!best) {
     pb.innerHTML = `
-      <div class="supa-pred-badge">🎴 Bàn ${banId}</div>
+      <div class="supa-pred-badge">🎴 Bàn ${banId} — ${gameName}</div>
       <div class="bcr-quick-stats">
         <div class="bcr-qs-item"><span>🔴 Cái</span><strong>${caiPct}%</strong></div>
         <div class="bcr-qs-item"><span>🔵 Con</span><strong>${conPct}%</strong></div>
@@ -354,11 +384,11 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
   const nextPhien = fullSeq.length + 1;
 
   pb.innerHTML = `
-    <div class="supa-pred-badge">🎴 Bàn ${banId} — Baccarat</div>
+    <div class="supa-pred-badge">🎴 Bàn ${banId} — ${gameName}</div>
     <div class="bcr-quick-stats">
       <div class="bcr-qs-item"><span>🔴 Cái</span><strong style="color:#ef4444">${caiPct}%</strong><small>(${cai})</small></div>
       <div class="bcr-qs-item"><span>🔵 Con</span><strong style="color:#3b82f6">${conPct}%</strong><small>(${con})</small></div>
-      <div class="bcr-qs-item"><span>🟡 Hòa</span><strong>${hoa > 0 ? Math.round(hoa/total_p*100) : 0}%</strong><small>(${hoa})</small></div>
+      <div class="bcr-qs-item"><span>🟡 Hòa</span><strong>${total_p > 0 ? Math.round(hoa/total_p*100) : 0}%</strong><small>(${hoa})</small></div>
     </div>
     <div class="bcr-road-tag">🛤️ Đường đi: <strong>${road || "—"}</strong></div>
     <div class="pred-next-lbl">Dự đoán phiên #${nextPhien}</div>
@@ -400,6 +430,7 @@ function setActivePage(name) {
     const el = document.getElementById("page-" + p);
     if (!el) return;
     if (p === "game") el.style.display = name === "game" ? "flex" : "none";
+    else if (p === "lobby-mgr") el.style.display = name === p ? "flex" : "none";
     else el.style.display = name === p ? "block" : "none";
   });
 }
@@ -452,11 +483,15 @@ async function renderLobbyManager() {
     const grad    = BRAND_GRADIENT[app] || "linear-gradient(135deg,#1e2d42,#0e1520)";
     const isMaint = !!maint[app];
     const apis    = APIS[app] || [];
+    const imgUrl  = (typeof BRAND_IMG !== "undefined" && BRAND_IMG[app]) ? BRAND_IMG[app] : "";
     const card = document.createElement("div");
     card.className = "lobby-mgr-card";
     card.innerHTML = `
       <div class="lmgr-banner" style="background:${grad}">
-        <div class="lmgr-emoji">${em}</div>
+        ${imgUrl
+          ? `<img src="${imgUrl}" class="lmgr-logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><div class="lmgr-emoji" style="display:none">${em}</div>`
+          : `<div class="lmgr-emoji">${em}</div>`
+        }
         <div class="lmgr-status-badge ${isMaint ? "maint" : "online"}">${isMaint ? "🔧 BẢO TRÌ" : "✅ ONLINE"}</div>
       </div>
       <div class="lmgr-info">

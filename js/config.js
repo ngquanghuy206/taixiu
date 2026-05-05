@@ -25,29 +25,29 @@ const DB_TABLES = {
 // ── SẢNH TÀI XỈU ────────────────────────────────────────────
 const APIS_TX = {
   sunwin: [
-    { label: "Tài Xỉu", url: "https://markers-amenities-vertex-gratuit.trycloudflare.com/api/tx",      type: "normal" },
-    { label: "Sicbo",    url: "https://afterwards-motels-honors-vendors.trycloudflare.com/api/sunsicbo", type: "md5" },
+    { label: "Tai Xiu", url: "https://markers-amenities-vertex-gratuit.trycloudflare.com/api/tx",      type: "normal" },
+    { label: "Sicbo",   url: "https://afterwards-motels-honors-vendors.trycloudflare.com/api/sunsicbo", type: "md5" },
   ],
   xocdia88: [
-    { label: "TX MD5",   url: "https://acres-scientists-balanced-paso.trycloudflare.com/api/taixiu",   type: "md5" },
+    { label: "TX MD5",  url: "https://acres-scientists-balanced-paso.trycloudflare.com/api/taixiu",   type: "md5" },
   ],
   hitclub: [
-    { label: "TX MD5",   url: "https://nirvana-corners-discussing-treating.trycloudflare.com/api/tx",  type: "md5_hitclub" },
+    { label: "TX MD5",  url: "https://nirvana-corners-discussing-treating.trycloudflare.com/api/tx",  type: "md5_hitclub" },
   ],
   lc79: [
-    { label: "TX Thường", url: "https://living-telecommunications-start-consoles.trycloudflare.com/api/tx",     type: "normal" },
+    { label: "TX Thuong", url: "https://living-telecommunications-start-consoles.trycloudflare.com/api/tx",     type: "normal" },
     { label: "TX MD5",    url: "https://living-telecommunications-start-consoles.trycloudflare.com/api/txmd5",   type: "md5" },
-    { label: "Xóc Đĩa",  url: "https://living-telecommunications-start-consoles.trycloudflare.com/api/xocdia",  type: "xocdia" },
+    { label: "Xoc Dia",   url: "https://living-telecommunications-start-consoles.trycloudflare.com/api/xocdia",  type: "xocdia" },
   ],
   betvip: [
-    { label: "TX Thường", url: "https://wide-epic-steve-file.trycloudflare.com/api/tx",    type: "normal" },
+    { label: "TX Thuong", url: "https://wide-epic-steve-file.trycloudflare.com/api/tx",    type: "normal" },
     { label: "TX MD5",    url: "https://wide-epic-steve-file.trycloudflare.com/api/txmd5", type: "md5" },
   ],
   "789club": [
-    { label: "Tài Xỉu", url: "https://dependent-epinions-somebody-enclosed.trycloudflare.com/api/tx", type: "normal" },
+    { label: "Tai Xiu", url: "https://dependent-epinions-somebody-enclosed.trycloudflare.com/api/tx", type: "normal" },
   ],
   max789: [
-    { label: "Tài Xỉu", url: "https://cage-adjustment-whose-banner.trycloudflare.com/api/tx", type: "md5" },
+    { label: "Tai Xiu", url: "https://cage-adjustment-whose-banner.trycloudflare.com/api/tx", type: "md5" },
   ],
   b52: [
     { label: "TX MD5",  url: "https://gold-ultra-fails-handles.trycloudflare.com/txmd5", type: "md5" },
@@ -64,7 +64,7 @@ const APIS_TX = {
 // ── SẢNH BACCARAT ────────────────────────────────────────────
 const APIS_BCR = {
   bcr: [
-    { label: "Baccarat", url: "https://classic-watching-cup-representatives.trycloudflare.com/api/bcr", type: "bcr", game: "baccarat" },
+    { label: "Baccarat Sexy", url: "https://classic-watching-cup-representatives.trycloudflare.com/api/bcr", type: "bcr", game: "baccarat" },
   ],
 };
 
