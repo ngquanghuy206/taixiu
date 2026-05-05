@@ -645,8 +645,8 @@ function ensemblePredict(results, lb) {
   const avgAcc = Object.values(btAcc).reduce((a,b)=>a+b,0) / names.length;
 
   const conf = Math.min(Math.round(
-    normed[best] * 0.30 + voteRatio * 0.25 + avgAcc * 0.28 + margin * 0.17
-  ) * 100, 94);
+    (normed[best] * 0.30 + voteRatio * 0.25 + avgAcc * 0.28 + margin * 0.17) * 100
+  ), 94);
 
   return { best, conf, votes: voteBest, total: names.length, topM, topAcc, btAcc };
 }

@@ -78,6 +78,31 @@ async function preloadAllStats() {
       }
     } catch(e2) { console.warn("preloadAllStats BCR lỗi:", e2); }
   } catch(e) { console.warn("preloadAllStats lỗi:", e); }
+
+  // Fallback: tx_verdicts_v2 cho các sảnh chưa có stats_json trong history
+  try {
+    const vRes = await fetch(
+      `${SUPA_URL}/rest/v1/${DB_TABLES.verdicts}?select=app,api_label,dung&order=created_at.desc&limit=2000`,
+      { headers: _SH() }
+    );
+    if (vRes.ok) {
+      const rows = await vRes.json();
+      const counts = {};
+      rows.forEach(r => {
+        const k = r.app + "|" + r.api_label;
+        if (!counts[k]) counts[k] = { app: r.app, label: r.api_label, d: 0, s: 0 };
+        if (r.dung) counts[k].d++; else counts[k].s++;
+      });
+      Object.values(counts).forEach(({ app, label, d, s }) => {
+        if (!window._statData[app]) window._statData[app] = {};
+        // Chỉ override nếu chưa có hoặc tổng = 0
+        const existing = window._statData[app][label];
+        if (!existing || (existing.d + existing.s) === 0) {
+          window._statData[app][label] = { d, s };
+        }
+      });
+    }
+  } catch(e2) { console.warn("preloadAllStats verdicts fallback lỗi:", e2); }
 }
 
 function launchApp() {
