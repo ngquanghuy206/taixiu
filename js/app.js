@@ -42,18 +42,41 @@ function startTopbarCountdown(expireAt) {
 // ── PRELOAD STATS CHO TẤT CẢ SẢNH (badge %) ──────────────
 async function preloadAllStats() {
   try {
+    // Fetch TX stats từ tx_history_v2
     const rows = await supaFetchAllLatest();
-    if (!Array.isArray(rows)) return;
-    rows.forEach(row => {
-      if (!row.stats_json) return;
-      const app   = row.app;
-      const label = row.api_label;
-      if (!window._statData[app]) window._statData[app] = {};
-      window._statData[app][label] = {
-        d: row.stats_json.dung || 0,
-        s: row.stats_json.sai  || 0
-      };
-    });
+    if (Array.isArray(rows)) {
+      rows.forEach(row => {
+        if (!row.stats_json) return;
+        const app   = row.app;
+        const label = row.api_label;
+        if (!window._statData[app]) window._statData[app] = {};
+        window._statData[app][label] = {
+          d: row.stats_json.dung || 0,
+          s: row.stats_json.sai  || 0
+        };
+      });
+    }
+    // Fetch BCR verdicts từ bcr_verdicts_v2 để tính accuracy BCR
+    try {
+      const bcrRes = await fetch(
+        `${SUPA_URL}/rest/v1/${DB_TABLES.bcrVerdicts}?select=app,api_label,dung,sai&order=updated_at.desc`,
+        { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
+      );
+      if (bcrRes.ok) {
+        const bcrRows = await bcrRes.json();
+        if (Array.isArray(bcrRows)) {
+          bcrRows.forEach(row => {
+            const app   = row.app || "bcr";
+            const label = row.api_label || "Baccarat Sexy";
+            if (!window._statData[app]) window._statData[app] = {};
+            window._statData[app][label] = {
+              d: row.dung || 0,
+              s: row.sai  || 0
+            };
+          });
+        }
+      }
+    } catch(e2) { console.warn("preloadAllStats BCR lỗi:", e2); }
   } catch(e) { console.warn("preloadAllStats lỗi:", e); }
 }
 
@@ -278,6 +301,12 @@ async function openBcrGame(app, banId) {
   const em = BRAND_EMOJI[app] || "🎴";
   document.getElementById("game-brand-tag").textContent = `${em} BCR — Bàn ${banId}`;
   document.getElementById("topbar-center").innerHTML    = `<span class="topbar-brand">${em} Baccarat — Bàn ${banId}</span>`;
+  // Hiện loading spinner ngay trong pred-body
+  const pbInit = document.getElementById("pred-body");
+  if (pbInit) pbInit.innerHTML = `<div class="pred-loading"><span>🔄 Đang tải dữ liệu bàn ${banId}...</span></div>`;
+  // Reset hub hist panel
+  const hubInit = document.getElementById("hub-hist-panel");
+  if (hubInit) hubInit.innerHTML = `<div class="hub-hist-empty">⏳ Đang tải dữ liệu...</div>`;
 
   buildApiTabs();
   updateLobbyBtnLabel(app);
@@ -296,35 +325,70 @@ async function doFetchBcr(app, banId) {
   const api = APIS[app]?.[0];
   if (!api) return;
   const pb = document.getElementById("pred-body");
-  try {
-    // Load từ Supabase bcr_results_v2 — tránh CORS khi gọi API trực tiếp
-    // order=updated_at.desc để lấy row MỚI NHẤT cho bàn này
-    const res = await fetch(
-      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&ban=eq.${encodeURIComponent(banId)}&select=*&order=updated_at.desc&limit=1`,
-      { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
-    );
-    if (!res.ok) throw new Error("Supabase lỗi " + res.status);
-    const rows = await res.json();
-    const ban = rows?.[0];
-    if (!ban) { if (pb) pb.innerHTML = `<div class="pred-loading">⚠️ Không tìm thấy bàn ${banId}</div>`; return; }
-
-    const results = ban.results_raw || "";
-    const road    = ban.good_road || "";
-    const seq     = [...results].filter(c => "PBT".includes(c));
-    const kqMap   = {"P":"Con","B":"Cái","T":"Hòa"};
-    const fullSeq = seq.map(c => kqMap[c] || c);
-    const label   = api.label;
-    const lastKq  = fullSeq[fullSeq.length - 1] || "?";
-
-    // Save history
-    const hist = window._histData[app]?.[label] || [];
-    window._histData[app][label] = fullSeq.slice(-80).map((kq, i) => ({ phien: String(i+1), ket_qua: kq }));
-
-    renderBcrPredPanel(app, api, ban, fullSeq, road);
-    renderHistBarBcr(app, api, fullSeq);
-  } catch(e) {
-    if (pb) pb.innerHTML = `<div class="pred-loading">⚠️ Lỗi tải dữ liệu bàn ${banId}</div>`;
+  // Hiện loading spinner ngay
+  if (pb && pb.innerHTML.includes("Lỗi") || (pb && !pb.innerHTML.trim())) {
+    if (pb) pb.innerHTML = `<div class="pred-loading"><span>🔄 Đang tải dữ liệu bàn ${banId}...</span></div>`;
   }
+  // Thử fetch với retry (2 lần)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(
+        `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&ban=eq.${encodeURIComponent(banId)}&select=*&order=updated_at.desc&limit=1`,
+        { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
+      );
+      if (!res.ok) throw new Error("Supabase lỗi " + res.status);
+      const rows = await res.json();
+      const ban = rows?.[0];
+      if (!ban) {
+        // Thử tìm không phân biệt hoa thường cho ban ID
+        const res2 = await fetch(
+          `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&select=ban,results_raw,good_road,du_doan_tiep,do_tin_cay,tong_phien,cai_count,con_count,hoa_count,updated_at&order=updated_at.desc&limit=1`,
+          { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
+        );
+        const rows2 = await res2.json();
+        const fallbackBan = rows2?.find(r => String(r.ban) === String(banId)) || rows2?.[0];
+        if (!fallbackBan) {
+          if (pb) pb.innerHTML = `<div class="pred-loading">⏳ Bàn ${banId} chưa có dữ liệu — đang chờ bot cập nhật...</div>`;
+          return;
+        }
+        return _processBcrBanData(app, api, banId, fallbackBan, pb);
+      }
+      return _processBcrBanData(app, api, banId, ban, pb);
+    } catch(e) {
+      if (attempt === 1) {
+        if (pb) pb.innerHTML = `<div class="pred-loading">⚠️ Lỗi kết nối — đang thử lại...<br/><small>${e.message}</small></div>`;
+        // retry sau 3s
+        setTimeout(() => doFetchBcr(app, banId), 3000);
+      } else {
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    }
+  }
+}
+
+function _processBcrBanData(app, api, banId, ban, pb) {
+  const results = ban.results_raw || "";
+  const road    = ban.good_road || "";
+  const seq     = [...results].filter(c => "PBT".includes(c));
+  const kqMap   = {"P":"Con","B":"Cái","T":"Hòa"};
+  const fullSeq = seq.map(c => kqMap[c] || c);
+  const label   = api.label;
+
+  // Save history với phien ID thực
+  if (!window._histData[app]) window._histData[app] = {};
+  window._histData[app][label] = fullSeq.slice(-80).map((kq, i) => ({
+    phien: String(i + 1), ket_qua: kq,
+    xuc_xac_1: null, xuc_xac_2: null, xuc_xac_3: null
+  }));
+
+  // Update BCR stats (accuracy tracking)
+  if (!window._statData[app]) window._statData[app] = {};
+  if (!window._statData[app][label]) window._statData[app][label] = { d: 0, s: 0 };
+
+  renderBcrPredPanel(app, api, ban, fullSeq, road);
+  renderHistBarBcr(app, api, fullSeq);
+  // Cập nhật hub history panel (cột phải)
+  renderHubHistBcr(app, api, fullSeq, ban);
 }
 
 function renderHistBarBcr(app, api, fullSeq) {
@@ -337,10 +401,14 @@ function renderHistBarBcr(app, api, fullSeq) {
   const recent = fullSeq.slice(-14);
   let cai = 0, con = 0;
   recent.forEach(kq => {
+    if (!kq || kq === "?") return; // bỏ qua phiên chưa có data
     const d = document.createElement("div");
-    d.className = "h-dot " + (RCL[kq] || "");
+    const cls = RCL[kq] || "";
+    d.className = "h-dot " + cls;
     d.title = kq;
-    d.textContent = RE[kq] || "?";
+    // Map emoji BCR: Cái=🔴, Con=🔵, Hòa=🟡
+    const bcrEmoji = {"Cái":"🔴","Con":"🔵","Hòa":"🟡"};
+    d.textContent = bcrEmoji[kq] || RE[kq] || "⬜";
     bar.appendChild(d);
     if (kq === "Cái") cai++;
     else if (kq === "Con") con++;
@@ -357,6 +425,33 @@ function renderHistBarBcr(app, api, fullSeq) {
     <span class="hist-sum-sep">·</span>
     <span class="hist-sum-item xiu">🔵 Con: <strong>${con}</strong></span>
   </div>`;
+}
+
+function renderHubHistBcr(app, api, fullSeq, ban) {
+  const panel = document.getElementById("hub-hist-panel");
+  if (!panel) return;
+  if (!fullSeq || !fullSeq.length) {
+    panel.innerHTML = `<div class="hub-hist-empty">⏳ Đang chờ dữ liệu bàn...</div>`;
+    return;
+  }
+  const recent = [...fullSeq].reverse().slice(0, 30);
+  let html = "";
+  const banId = ban?.ban || "?";
+  recent.forEach((kq, i) => {
+    const cl = RCL[kq] || "";
+    const emoji = RE[kq] || "⬜";
+    const phienNum = fullSeq.length - i;
+    html += `
+    <div class="hub-hist-row ${cl}">
+      <div class="hub-hist-phien">#${phienNum}</div>
+      <div class="hub-hist-dice" style="font-size:18px">🎴</div>
+      <div class="hub-hist-kq">
+        <span class="hub-kq-emoji">${emoji}</span>
+        <span class="hub-kq-label">${kq}</span>
+      </div>
+    </div>`;
+  });
+  panel.innerHTML = html;
 }
 
 function renderBcrPredPanel(app, api, ban, fullSeq, road) {
