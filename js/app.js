@@ -135,12 +135,26 @@ async function openBcrTablePicker(app) {
 
   try {
     // Load từ Supabase bcr_results_v2 thay vì gọi API trực tiếp (tránh CORS)
+    // order=updated_at.desc để lấy row mới nhất trước, sau đó deduplicate theo ban
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&select=ban,ket_qua_moi_nhat,tong_phien,cai_count,con_count,hoa_count,good_road,results_raw,du_doan_tiep,do_tin_cay,updated_at&order=ban.asc`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&select=ban,ket_qua_moi_nhat,tong_phien,cai_count,con_count,hoa_count,good_road,results_raw,du_doan_tiep,do_tin_cay,updated_at&order=updated_at.desc&limit=200`,
       { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
     );
     if (!res.ok) throw new Error("Supabase lỗi " + res.status);
-    const rows = await res.json();
+    const rawRows = await res.json();
+
+    // Deduplicate: chỉ giữ row mới nhất (updated_at lớn nhất) cho mỗi ban
+    const seenBans = new Set();
+    const rows = rawRows.filter(r => {
+      const key = String(r.ban);
+      if (seenBans.has(key)) return false;
+      seenBans.add(key);
+      return true;
+    }).sort((a, b) => {
+      // Sắp xếp theo số ban (numeric)
+      const na = parseInt(a.ban) || 0, nb = parseInt(b.ban) || 0;
+      return na - nb;
+    });
 
     if (loading) loading.style.display = "none";
     if (!rows || !rows.length) {
@@ -284,8 +298,9 @@ async function doFetchBcr(app, banId) {
   const pb = document.getElementById("pred-body");
   try {
     // Load từ Supabase bcr_results_v2 — tránh CORS khi gọi API trực tiếp
+    // order=updated_at.desc để lấy row MỚI NHẤT cho bàn này
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&ban=eq.${encodeURIComponent(banId)}&select=*&limit=1`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&ban=eq.${encodeURIComponent(banId)}&select=*&order=updated_at.desc&limit=1`,
       { headers: { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}` } }
     );
     if (!res.ok) throw new Error("Supabase lỗi " + res.status);
