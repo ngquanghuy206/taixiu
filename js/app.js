@@ -318,7 +318,7 @@ async function openBcrGame(app, banId) {
   if (barInit) barInit.innerHTML = "";
   if (phInit)  phInit.classList.add("hidden");
   const summaryInit = document.getElementById("pred-hist-summary");
-  if (summaryInit) summaryInit.innerHTML = "";
+  if (summaryInit) { summaryInit.innerHTML = ""; summaryInit.removeAttribute("data-mode"); }
 
   buildApiTabs();
   updateLobbyBtnLabel(app);
@@ -450,6 +450,7 @@ function renderHistBarBcr(app, api, fullSeq) {
     summaryEl.className = "pred-hist-summary";
     ph.appendChild(summaryEl);
   }
+  summaryEl.setAttribute("data-mode", "bcr");
   summaryEl.innerHTML = `<div class="hist-sum-row">
     <span class="hist-sum-item tai">🔴 Cái: <strong>${cai}</strong></span>
     <span class="hist-sum-sep">·</span>
@@ -489,8 +490,9 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
   if (!pb) return;
   const lb = ["Cái", "Con"];
   const rl = fullSeq.filter(k => lb.includes(k));
-  const { best, conf, votes, total } = (rl.length >= 5)
-    ? ensemblePredict(rl, lb)
+  const _epFn = typeof ensemblePredict === "function" ? ensemblePredict : (typeof window.ensemblePredict === "function" ? window.ensemblePredict : null);
+  const { best, conf, votes, total } = (rl.length >= 5 && _epFn)
+    ? _epFn(rl, lb)
     : { best: null, conf: 0, votes: 0, total: 0 };
 
   const st = window._statData[app]?.[api.label] || { d: 0, s: 0 };
@@ -849,6 +851,9 @@ async function openGame(app) {
   if (hubClear) hubClear.innerHTML = `<div class="hub-hist-empty">⏳ Đang chờ dữ liệu từ sảnh...</div>`;
   if (barClear) barClear.innerHTML = "";
   if (phClear)  phClear.classList.add("hidden");
+  // Clear BCR mode flag khi vào TX
+  const sumClear = document.getElementById("pred-hist-summary");
+  if (sumClear) { sumClear.innerHTML = ""; sumClear.removeAttribute("data-mode"); }
 
   doFetch();
   clearInterval(window._fetchTimer);
@@ -1292,6 +1297,32 @@ async function supaLoadFallback(app, api) {
     const pred = await supaFetchLatestPred(app, api.label);
     _dbg(`  tx_predictions_v2 →`, pred ? `du_doan=${pred.du_doan} conf=${pred.do_tin_cay}% phien=#${pred.phien}` : "NULL");
 
+    // ── BƯỚC 6: Fetch verdicts → restore stats đúng/sai sau reload ──
+    try {
+      const vRes = await fetch(
+        `${SUPA_URL}/rest/v1/${DB_TABLES.verdicts}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(api.label)}&order=created_at.desc&limit=100&select=phien,du_doan,ket_qua_thuc_te,dung,created_at`,
+        { headers: SUPA_HEADERS }
+      );
+      if (vRes.ok) {
+        const verdicts = await vRes.json();
+        if (Array.isArray(verdicts) && verdicts.length > 0) {
+          const logKey = app + "_" + api.label;
+          if (!window._predLog) window._predLog = {};
+          window._predLog[logKey] = [...verdicts].reverse().map(v => ({
+            phien: v.phien, pred: normalizeKq(v.du_doan),
+            actual: normalizeKq(v.ket_qua_thuc_te), ok: v.dung
+          }));
+          // Chỉ update stats nếu chưa có từ history_json
+          if (!histRow || !histRow.stats_json) {
+            const d = verdicts.filter(v => v.dung).length;
+            const s = verdicts.filter(v => !v.dung).length;
+            window._statData[app][api.label] = { d, s };
+          }
+          _dbg(`  📋 verdicts: ${verdicts.length} lịch sử đúng/sai loaded`);
+        }
+      }
+    } catch(ve) { _dbg(`  ⚠️ verdicts lỗi: ${ve.message}`); }
+
     if (pred && pred.du_doan) {
       // Có dự đoán từ cloud → dùng luôn (nguồn chính từ bot.py)
       _dbg(`  ✅ Cloud pred: ${pred.du_doan} (${pred.do_tin_cay}%)`);
@@ -1532,6 +1563,8 @@ function renderHistBar(app, api) {
   
   // Thêm summary lịch sử
   let summaryEl = document.getElementById("pred-hist-summary");
+  // Nếu đang ở BCR mode thì không override summary
+  if (summaryEl && summaryEl.getAttribute("data-mode") === "bcr") return;
   if (!summaryEl) {
     summaryEl = document.createElement("div");
     summaryEl.id = "pred-hist-summary";
@@ -1627,7 +1660,9 @@ function renderPred(app, api, verdict) {
     return;
   }
 
-  const { best, conf, votes, total, topM, topAcc } = ensemblePredict(results, lb);
+  if (typeof ensemblePredict !== "function" && typeof window.ensemblePredict !== "function") { if (pb) pb.innerHTML = "<div class=\"pred-loading\">⚠️ Lỗi tải thuật toán AI. Vui lòng tải lại trang!</div>"; return; }
+  const _ep = typeof ensemblePredict === "function" ? ensemblePredict : window.ensemblePredict;
+  const { best, conf, votes, total, topM, topAcc } = _ep(results, lb);
   if (!best) { pb.innerHTML = `${verdictHtml}<div class="pred-loading">Không đủ dữ liệu</div>`; return; }
 
   const curPhien = hist.length > 0 ? hist[hist.length - 1].phien : "?";
