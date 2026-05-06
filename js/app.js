@@ -56,23 +56,26 @@ async function preloadAllStats() {
         };
       });
     }
-    // Fetch BCR verdicts từ bcr_verdicts_v2 để tính accuracy BCR
+    // Fetch BCR verdicts từ bcr_verdicts_v2 để tính accuracy BCR per bàn
     try {
       const bcrRes = await fetch(
-        `${SUPA_URL}/rest/v1/${DB_TABLES.bcrVerdicts}?select=app,dung&order=updated_at.desc&limit=500`,
+        `${SUPA_URL}/rest/v1/${DB_TABLES.bcrVerdicts}?select=app,ban,dung&order=updated_at.desc&limit=500`,
         { headers: _SH() }
       );
       if (bcrRes.ok) {
         const bcrRows = await bcrRes.json();
         if (Array.isArray(bcrRows)) {
-          // Tool không lưu api_label → gom tất cả vào "Baccarat"
-          let d = 0, s = 0;
-          bcrRows.forEach(row => {
-            if (row.dung === true) d++;
-            else if (row.dung === false) s++;
-          });
+          // FIX: tách stats theo từng bàn (ban) thay vì gom chung → tránh chồng kết quả
           if (!window._statData["bcr"]) window._statData["bcr"] = {};
-          window._statData["bcr"]["Baccarat"] = { d, s };
+          let totalD = 0, totalS = 0;
+          bcrRows.forEach(row => {
+            const banKey = "Ban_" + String(row.ban || "all");
+            if (!window._statData["bcr"][banKey]) window._statData["bcr"][banKey] = { d: 0, s: 0 };
+            if (row.dung === true)  { window._statData["bcr"][banKey].d++; totalD++; }
+            else if (row.dung === false) { window._statData["bcr"][banKey].s++; totalS++; }
+          });
+          // Cũng lưu tổng vào "Baccarat" để badge lobby hiện được
+          window._statData["bcr"]["Baccarat"] = { d: totalD, s: totalS };
         }
       }
     } catch(e2) { console.warn("preloadAllStats BCR lỗi:", e2); }
@@ -145,10 +148,13 @@ function launchApp() {
     }
     // Render lobby ngay — không chờ preloadAllStats
     buildLobbies();
-    // Preload stats song song → chỉ update badge % sau khi xong, không block UI
-    preloadAllStats().then(() => {
-      Object.keys(APIS).forEach(app => updateLobbyAccBadge(app));
-    });
+    // FIX LAG: defer preloadAllStats ra sau khi UI đã render xong (~300ms)
+    // tránh block main thread ngay lúc login
+    setTimeout(() => {
+      preloadAllStats().then(() => {
+        Object.keys(APIS).forEach(app => updateLobbyAccBadge(app));
+      });
+    }, 350);
   } catch(err) {
     console.error("[launchApp] Lỗi:", err);
     // Reset màn hình auth nếu launch thất bại
@@ -320,7 +326,7 @@ async function openBcrGame(app, banId) {
   if (!window._lastPhien[app]) window._lastPhien[app] = {};
   if (!window._pendingPred[app]) window._pendingPred[app] = {};
 
-  const label = APIS[app]?.[0]?.label || "Baccarat";
+  const label = "Ban_" + String(banId); // FIX: tách stats theo từng bàn
   window._histData[app][label]    = window._histData[app][label] || [];
   window._statData[app][label]    = window._statData[app][label] || { d: 0, s: 0 };
   window._lastPhien[app][label]   = window._lastPhien[app][label] || null;
@@ -423,7 +429,8 @@ function _processBcrBanData(app, api, banId, ban, pb) {
   const seq     = [...results].filter(c => "PBT".includes(c));
   const kqMap   = {"P":"Con","B":"Cái","T":"Hòa"};
   const fullSeq = seq.map(c => kqMap[c] || c);
-  const label   = api.label;
+  // FIX: dùng banId làm label key để tránh chồng kết quả giữa các bàn
+  const label   = "Ban_" + String(banId);
 
   // Save history với phien ID thực
   if (!window._histData[app]) window._histData[app] = {};
@@ -529,10 +536,12 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
     votes = 0; total = 0;
   }
 
-  const st = window._statData[app]?.[api.label] || { d: 0, s: 0 };
+  const banId  = ban.ban || ban.id;
+  // FIX: dùng banId-key để đọc stats riêng từng bàn, tránh chồng kết quả
+  const banLabel = "Ban_" + String(banId);
+  const st = window._statData[app]?.[banLabel] || { d: 0, s: 0 };
   const acc = st.d + st.s > 0 ? Math.round(st.d / (st.d + st.s) * 100) + "%" : "N/A";
   const lastKq = fullSeq[fullSeq.length - 1] || "?";
-  const banId  = ban.ban || ban.id;
   // Use pre-computed counts from Supabase if available
   const rawStr = ban.results_raw || ban.results || "";
   const cai  = ban.cai_count !== undefined ? ban.cai_count : (rawStr.split("B").length - 1);
@@ -568,7 +577,7 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
       <div class="bcr-qs-item"><span>🔵 Con</span><strong style="color:#3b82f6">${conPct}%</strong><small>(${con})</small></div>
       <div class="bcr-qs-item"><span>🟡 Hòa</span><strong>${total_p > 0 ? Math.round(hoa/total_p*100) : 0}%</strong><small>(${hoa})</small></div>
     </div>
-    <div class="bcr-road-tag">🛤️ Đường đi: <strong>${road || "—"}</strong></div>
+    <div class="bcr-road-tag" style="margin:6px 0;padding:6px 12px;background:rgba(155,89,182,0.15);border-left:3px solid #9b59b6;border-radius:6px;font-size:13px">🛤️ Đường đi: <strong style="color:#e2b3ff">${road || "Chưa xác định"}</strong></div>
     <div class="pred-next-lbl">Dự đoán phiên #${nextPhien}</div>
     <div class="pred-emoji-big spin-on-change">${RE[best] || "?"}</div>
     <div class="pred-label ${cl}">${best}</div>
@@ -587,7 +596,8 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
       <div class="pred-stat"><div class="pred-stat-val" style="color:var(--green)">${st.d}</div><div class="pred-stat-lbl">✅ Đúng</div></div>
       <div class="pred-stat"><div class="pred-stat-val" style="color:var(--tai)">${st.s}</div><div class="pred-stat-lbl">❌ Sai</div></div>
     </div>
-    <div class="algo-badge">🧠 ${total} thuật toán · Ensemble AI</div>`;
+    <div class="algo-badge">🧠 ${total || 68} thuật toán · Ensemble AI</div>
+    <button class="open-hist-btn" onclick="openHistModal('${app}','${banLabel}','${api.type}')">📋 Lịch Sử Dự Đoán</button>`;
 }
 
 // ── SIDEBAR ────────────────────────────────────────────────
@@ -617,6 +627,8 @@ function showHome() {
   clearInterval(window._fetchTimer); window._fetchTimer = null;
   // Cancel BCR retry timer nếu đang pending
   if (window._bcrRetryTimer) { clearTimeout(window._bcrRetryTimer); window._bcrRetryTimer = null; }
+  // FIX: cancel collecting retry khi thoát sảnh
+  if (window._collectingRetry) { clearTimeout(window._collectingRetry); window._collectingRetry = null; }
   // Reset BCR state để không leak vào TX games
   window._bcrSelectedTable = null;
   window._bcrPickerApp = null;
@@ -814,12 +826,14 @@ function _renderLobbyCards(g, maint) {
 }
 
 function getLobbyAccBadgeHtml(app) {
-  const apis = APIS[app] || [];
   let totalD = 0, totalS = 0;
-  apis.forEach(a => {
-    const st = window._statData?.[app]?.[a.label] || { d: 0, s: 0 };
-    totalD += st.d; totalS += st.s;
-  });
+  const appStat = window._statData?.[app];
+  if (appStat) {
+    // Gom tất cả labels (TX theo api.label, BCR theo banId hoặc "Baccarat")
+    Object.values(appStat).forEach(st => {
+      if (st && typeof st.d === "number") { totalD += st.d; totalS += st.s; }
+    });
+  }
   const total = totalD + totalS;
   if (total === 0) return "";
   const acc = Math.round(totalD / total * 100);
@@ -893,7 +907,14 @@ async function openGame(app) {
 
   doFetch();
   clearInterval(window._fetchTimer);
-  window._fetchTimer = setInterval(doFetch, 15000);
+  // FIX: poll 5s khi mới vào (chờ bot đẩy đủ data), sau 60s đổi về 15s
+  window._fetchTimer = setInterval(doFetch, 5000);
+  setTimeout(() => {
+    if (window._curApp === app && window._fetchTimer) {
+      clearInterval(window._fetchTimer);
+      window._fetchTimer = setInterval(doFetch, 15000);
+    }
+  }, 60000);
 
   // Realtime từ Supabase — nhận data ngay cả khi API sảnh lỗi
   const curApi = APIS[app][window._curApiIdx];
@@ -1167,6 +1188,8 @@ function switchApi(i) {
   // Restart realtime subscription cho api tab mới
   const app = window._curApp;
   if (app && APIS[app]?.[i]) {
+    // FIX: cancel collecting retry khi đổi tab
+    if (window._collectingRetry) { clearTimeout(window._collectingRetry); window._collectingRetry = null; }
     supaUnsubscribeAll().then(() => supaStartGameRealtime(app, APIS[app][i]));
   }
   doFetch();
@@ -1452,6 +1475,8 @@ async function supaStartGameRealtime(app, api) {
 
     renderHistBar(app, api);
     renderHubHist(app, api);
+    // FIX: gọi renderPred sau khi có phiên mới — để thoát khỏi "Thu thập (x/5)..."
+    renderPred(app, api, null);
     showToast(`🤖 AI KING DZI — Phiên mới: #${row.phien} — ${actualKq || ""}`, "info");
     if (window.TxSound) { try { window.TxSound.play.dice(); } catch(e) {} }
   });
@@ -1639,10 +1664,19 @@ function renderPred(app, api, verdict) {
     }
   }
 
-  if (results.length < 5) {
-    pb.innerHTML = `${verdictHtml}<div class="pred-loading"><div class="loading-orbit"><div class="orbit-ring"></div><div class="orbit-dot"></div></div><span>Thu thập dữ liệu (${results.length}/5)...</span></div>`;
+  if (results.length < 3) {
+    pb.innerHTML = `${verdictHtml}<div class="pred-loading"><div class="loading-orbit"><div class="orbit-ring"></div><div class="orbit-dot"></div></div><span>Thu thập dữ liệu (${results.length}/3)...</span><small style="display:block;opacity:.6;margin-top:6px">Bot đang đẩy dữ liệu lên — tự động cập nhật...</small></div>`;
+    // FIX: auto-retry sau 5s thay vì chờ 15s timer hoặc user bấm
+    if (!window._collectingRetry) {
+      window._collectingRetry = setTimeout(() => {
+        window._collectingRetry = null;
+        if (window._curApp === app) doFetch();
+      }, 5000);
+    }
     return;
   }
+  // Clear retry khi đã đủ data
+  if (window._collectingRetry) { clearTimeout(window._collectingRetry); window._collectingRetry = null; }
 
     const _ep = typeof ensemblePredict === "function" ? ensemblePredict : (typeof window.ensemblePredict === "function" ? window.ensemblePredict : null);
   if (!_ep) { if (pb) pb.innerHTML = "<div class=\"pred-loading\">⚠️ Lỗi tải thuật toán AI. Vui lòng tải lại trang!</div>"; return; }
@@ -1862,7 +1896,9 @@ async function openHistModal(app, label, type) {
       const table = (app === "bcr") ? DB_TABLES.bcrVerdicts : DB_TABLES.verdicts;
       const orderBy = (app === "bcr") ? "updated_at" : "created_at";
       const selectCols = (app === "bcr") ? "ban,du_doan,ket_qua_thuc_te,dung,updated_at" : "phien,du_doan,ket_qua_thuc_te,dung";
-      const filterLabel = (app === "bcr") ? "" : `&api_label=eq.${encodeURIComponent(label)}`;
+      // FIX: BCR filter theo ban cụ thể nếu label có dạng "Ban_C11"
+      const bcrBanId = (app === "bcr" && label.startsWith("Ban_")) ? label.replace("Ban_", "") : null;
+      const filterLabel = (app === "bcr") ? (bcrBanId ? `&ban=eq.${encodeURIComponent(bcrBanId)}` : "") : `&api_label=eq.${encodeURIComponent(label)}`;
       const vRes = await fetch(
         `${SUPA_URL}/rest/v1/${table}?app=eq.${encodeURIComponent(app)}${filterLabel}&order=${orderBy}.desc&limit=100&select=${selectCols}`,
         { headers: _SH() }

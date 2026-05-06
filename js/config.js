@@ -25,23 +25,23 @@ const DB_TABLES = {
 // ── SẢNH TÀI XỈU ────────────────────────────────────────────
 const APIS_TX = {
   sunwin: [
-    { label: "Tai Xiu", display: "Tài Xỉu", url: "https://markers-amenities-vertex-gratuit.trycloudflare.com/api/tx",      type: "normal" },
+    { label: "Tai Xiu", display: "Tài Xỉu", url: "https://bracket-ellen-roads-prefer.trycloudflare.com/api/tx",      type: "normal" },
     { label: "Sicbo",   display: "Xúc Xắc", url: "https://afterwards-motels-honors-vendors.trycloudflare.com/api/sunsicbo", type: "md5" },
   ],
   xocdia88: [
-    { label: "TX MD5",  url: "https://acres-scientists-balanced-paso.trycloudflare.com/api/taixiu",   type: "md5" },
+    { label: "TX MD5",  url: "https://books-carlo-instruments-capture.trycloudflare.com/api/taixiu",   type: "md5" },
   ],
   hitclub: [
-    { label: "TX MD5",  url: "https://nirvana-corners-discussing-treating.trycloudflare.com/api/tx",  type: "md5_hitclub" },
+    { label: "TX MD5",  url: "https://letting-tackle-newton-oak.trycloudflare.com/api/tx",  type: "md5_hitclub" },
   ],
   lc79: [
-    { label: "TX Thuong", url: "https://living-telecommunications-start-consoles.trycloudflare.com/api/tx",     type: "normal" },
-    { label: "TX MD5",    url: "https://living-telecommunications-start-consoles.trycloudflare.com/api/txmd5",   type: "md5" },
-    { label: "Xoc Dia",   url: "https://living-telecommunications-start-consoles.trycloudflare.com/api/xocdia",  type: "xocdia" },
+    { label: "TX Thuong", url: "https://chance-compete-chambers-feelings.trycloudflare.com/api/tx",     type: "normal" },
+    { label: "TX MD5",    url: "https://chance-compete-chambers-feelings.trycloudflare.com/api/txmd5",   type: "md5" },
+    { label: "Xoc Dia",   url: "https://chance-compete-chambers-feelings.trycloudflare.com/api/xocdia",  type: "xocdia" },
   ],
   betvip: [
-    { label: "TX Thuong", url: "https://wide-epic-steve-file.trycloudflare.com/api/tx",    type: "normal" },
-    { label: "TX MD5",    url: "https://wide-epic-steve-file.trycloudflare.com/api/txmd5", type: "md5" },
+    { label: "TX Thuong", url: "https://plastic-diet-visits-opens.trycloudflare.com/api/tx",    type: "normal" },
+    { label: "TX MD5",    url: "https://plastic-diet-visits-opens.trycloudflare.com/api/txmd5", type: "md5" },
   ],
   "789club": [
     { label: "Tai Xiu", url: "https://dependent-epinions-somebody-enclosed.trycloudflare.com/api/tx", type: "normal" },
