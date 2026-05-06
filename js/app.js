@@ -443,7 +443,9 @@ function _processBcrBanData(app, api, banId, ban, pb) {
   if (!window._statData[app]) window._statData[app] = {};
   if (!window._statData[app][label]) window._statData[app][label] = { d: 0, s: 0 };
 
-  renderBcrPredPanel(app, api, ban, fullSeq, road);
+  // FIX: tự tính đường đi nếu API không trả về
+  const displayRoad = road || calcBcrRoad(fullSeq);
+  renderBcrPredPanel(app, api, ban, fullSeq, displayRoad);
   renderHistBarBcr(app, api, fullSeq);
   // Cập nhật hub history panel (cột phải)
   renderHubHistBcr(app, api, fullSeq, ban);
@@ -516,6 +518,44 @@ function renderHubHistBcr(app, api, fullSeq, ban) {
   panel.innerHTML = html;
 }
 
+// ── TÍNH ĐƯỜNG ĐI BCR TỪ CHUỖI KẾT QUẢ ──────────────────
+function calcBcrRoad(fullSeq) {
+  const seq = fullSeq.filter(k => k === "Cái" || k === "Con");
+  if (seq.length < 3) return "";
+
+  // Tính streak cuối
+  const last = seq[seq.length - 1];
+  let streak = 1;
+  for (let i = seq.length - 2; i >= 0; i--) {
+    if (seq[i] === last) streak++;
+    else break;
+  }
+
+  // Tính tỉ lệ xen kẽ 10 phiên gần nhất
+  const recent = seq.slice(-10);
+  let alt = 0;
+  for (let i = 1; i < recent.length; i++) {
+    if (recent[i] !== recent[i-1]) alt++;
+  }
+  const altRate = recent.length > 1 ? alt / (recent.length - 1) : 0;
+
+  // Tính tỉ lệ cùng chiều 5 phiên gần nhất
+  const r5 = seq.slice(-5);
+  const dominantCount = r5.filter(x => x === last).length;
+
+  if (streak >= 5) return `${streak} bệt ${last}`;
+  if (streak >= 3) return `${streak} bệt ${last}`;
+  if (altRate >= 0.7) return "Cầu 212 xen kẽ";
+  if (dominantCount >= 4) return `Cầu nghiêng ${last}`;
+  if (altRate >= 0.5) return "Cầu đơn";
+  // Kiểm tra cầu 2-2 (từng cặp)
+  const last4 = seq.slice(-4);
+  if (last4.length === 4 && last4[0] === last4[1] && last4[2] === last4[3] && last4[0] !== last4[2]) {
+    return "Cầu 2-2";
+  }
+  return `Đang theo dõi`;
+}
+
 function renderBcrPredPanel(app, api, ban, fullSeq, road) {
   const pb = document.getElementById("pred-body");
   if (!pb) return;
@@ -577,7 +617,7 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
       <div class="bcr-qs-item"><span>🔵 Con</span><strong style="color:#3b82f6">${conPct}%</strong><small>(${con})</small></div>
       <div class="bcr-qs-item"><span>🟡 Hòa</span><strong>${total_p > 0 ? Math.round(hoa/total_p*100) : 0}%</strong><small>(${hoa})</small></div>
     </div>
-    <div class="bcr-road-tag" style="margin:6px 0;padding:6px 12px;background:rgba(155,89,182,0.15);border-left:3px solid #9b59b6;border-radius:6px;font-size:13px">🛤️ Đường đi: <strong style="color:#e2b3ff">${road || "Chưa xác định"}</strong></div>
+    <div class="bcr-road-tag" style="margin:6px 0;padding:6px 12px;background:rgba(155,89,182,0.15);border-left:3px solid #9b59b6;border-radius:6px;font-size:13px">🛤️ Đường đi: <strong style="color:#e2b3ff">${road || "Đang phân tích..."}</strong></div>
     <div class="pred-next-lbl">Dự đoán phiên #${nextPhien}</div>
     <div class="pred-emoji-big spin-on-change">${RE[best] || "?"}</div>
     <div class="pred-label ${cl}">${best}</div>
