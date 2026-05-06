@@ -384,6 +384,7 @@ function _doRenderUsers() {
       <td class="actions-cell">
         <button class="act-btn edit" onclick="openEdit(${i})" title="Sửa">✏️</button>
         ${!ok ? `<button class="act-btn renew" onclick="openRenew(${i})" title="Gia hạn">🔁</button>` : ""}
+        <button class="act-btn view-ip" onclick="viewDeviceIPs('${u.username}')" title="Xem IP thiết bị">👁️</button>
         <button class="act-btn ip-reset" onclick="resetIP('${u.username}')" title="Reset thiết bị">🔄</button>
         <button class="act-btn del" onclick="delUser(${i})" title="Xoá">🗑️</button>
       </td>`;
@@ -398,6 +399,62 @@ async function resetIP(username) {
   if (!confirm(`Reset thiết bị cho tài khoản "${username}"?\nSau khi reset, tài khoản có thể đăng nhập từ thiết bị mới.`)) return;
   await resetDeviceList(username);
   showToast(`✅ Đã reset thiết bị cho ${username}`);
+}
+
+async function viewDeviceIPs(username) {
+  const devList = await getDeviceList(username);
+  let modal = document.getElementById("ip-modal-overlay");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "ip-modal-overlay";
+    modal.style.cssText = `
+      position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;
+      display:flex;align-items:center;justify-content:center;
+    `;
+    modal.innerHTML = `
+      <div id="ip-modal-box" style="
+        background:#0d1b2e;border:1px solid #1e3a5f;border-radius:14px;
+        padding:24px 28px;min-width:300px;max-width:480px;width:90%;
+        box-shadow:0 8px 32px rgba(0,120,255,.18);
+      ">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <span id="ip-modal-title" style="color:#00d4ff;font-weight:700;font-size:15px;letter-spacing:.5px;"></span>
+          <button onclick="document.getElementById('ip-modal-overlay').remove()"
+            style="background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;line-height:1;">✕</button>
+        </div>
+        <div id="ip-modal-body"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  document.getElementById("ip-modal-title").textContent = `👁️ IP THIẾT BỊ — ${username.toUpperCase()}`;
+  const body = document.getElementById("ip-modal-body");
+
+  if (!devList || devList.length === 0) {
+    body.innerHTML = `<p style="color:#888;text-align:center;margin:8px 0;">Chưa có thiết bị nào đăng nhập</p>`;
+  } else {
+    body.innerHTML = devList.map((ip, idx) => `
+      <div style="
+        display:flex;align-items:center;gap:10px;
+        background:#0a1628;border:1px solid #1e3a5f;border-radius:8px;
+        padding:10px 14px;margin-bottom:8px;
+      ">
+        <span style="color:#ffd700;font-size:13px;min-width:22px;">📱${idx + 1}</span>
+        <span style="color:#e0f0ff;font-family:monospace;font-size:13px;flex:1;">${ip}</span>
+        <button onclick="copySingleIP('${ip}')"
+          style="background:#1e3a5f;border:none;color:#00d4ff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;">
+          Copy
+        </button>
+      </div>
+    `).join("");
+  }
+
+  document.getElementById("ip-modal-overlay").style.display = "flex";
+}
+
+function copySingleIP(ip) {
+  navigator.clipboard.writeText(ip).then(() => showToast("✅ Đã copy IP: " + ip)).catch(() => showToast("⚠️ Copy thất bại", "warn"));
 }
 
 function openCreate() {
@@ -450,6 +507,10 @@ async function submitUser() {
   }
 
   await saveUser({ username: u, password: p, expires: exp, max_devices: dev });
+  // Khi TẠO MỚI: xóa device list để đảm bảo không có IP cũ/admin bị lưu
+  if (_editIdx < 0) {
+    await resetDeviceList(u);
+  }
   closeModal();
   _cachedUsers = await getUsers();
   _doRenderUsers();
