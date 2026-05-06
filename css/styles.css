@@ -543,6 +543,7 @@ body::after{
 .act-btn.edit:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.07)}
 .act-btn.ip-reset:hover{border-color:var(--gold);color:var(--gold);background:rgba(255,215,0,.07)}
 .act-btn.del:hover{border-color:var(--tai);color:var(--tai);background:rgba(239,68,68,.07)}
+.act-btn.view-ip:hover{border-color:#a78bfa;color:#a78bfa;background:rgba(167,139,250,.07)}
 
 /* MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px)}
