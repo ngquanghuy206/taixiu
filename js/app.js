@@ -59,21 +59,20 @@ async function preloadAllStats() {
     // Fetch BCR verdicts từ bcr_verdicts_v2 để tính accuracy BCR
     try {
       const bcrRes = await fetch(
-        `${SUPA_URL}/rest/v1/${DB_TABLES.bcrVerdicts}?select=app,api_label,dung,sai&order=updated_at.desc`,
+        `${SUPA_URL}/rest/v1/${DB_TABLES.bcrVerdicts}?select=app,dung&order=updated_at.desc&limit=500`,
         { headers: _SH() }
       );
       if (bcrRes.ok) {
         const bcrRows = await bcrRes.json();
         if (Array.isArray(bcrRows)) {
+          // Tool không lưu api_label → gom tất cả vào "Baccarat"
+          let d = 0, s = 0;
           bcrRows.forEach(row => {
-            const app   = row.app || "bcr";
-            const label = row.api_label || "Baccarat Sexy";
-            if (!window._statData[app]) window._statData[app] = {};
-            window._statData[app][label] = {
-              d: row.dung || 0,
-              s: row.sai  || 0
-            };
+            if (row.dung === true) d++;
+            else if (row.dung === false) s++;
           });
+          if (!window._statData["bcr"]) window._statData["bcr"] = {};
+          window._statData["bcr"]["Baccarat"] = { d, s };
         }
       }
     } catch(e2) { console.warn("preloadAllStats BCR lỗi:", e2); }
@@ -1861,15 +1860,18 @@ async function openHistModal(app, label, type) {
   if (!window._predLog[logKey] || window._predLog[logKey].length === 0) {
     try {
       const table = (app === "bcr") ? DB_TABLES.bcrVerdicts : DB_TABLES.verdicts;
+      const orderBy = (app === "bcr") ? "updated_at" : "created_at";
+      const selectCols = (app === "bcr") ? "ban,du_doan,ket_qua_thuc_te,dung,updated_at" : "phien,du_doan,ket_qua_thuc_te,dung";
+      const filterLabel = (app === "bcr") ? "" : `&api_label=eq.${encodeURIComponent(label)}`;
       const vRes = await fetch(
-        `${SUPA_URL}/rest/v1/${table}?app=eq.${encodeURIComponent(app)}&api_label=eq.${encodeURIComponent(label)}&order=created_at.desc&limit=100&select=phien,du_doan,ket_qua_thuc_te,dung`,
+        `${SUPA_URL}/rest/v1/${table}?app=eq.${encodeURIComponent(app)}${filterLabel}&order=${orderBy}.desc&limit=100&select=${selectCols}`,
         { headers: _SH() }
       );
       if (vRes.ok) {
         const rows = await vRes.json();
         if (Array.isArray(rows) && rows.length > 0) {
           window._predLog[logKey] = [...rows].reverse().map(v => ({
-            phien:  String(v.phien),
+            phien:  String(v.phien || v.ban || "-"),
             pred:   normalizeKq(v.du_doan),
             actual: normalizeKq(v.ket_qua_thuc_te),
             ok:     v.dung
