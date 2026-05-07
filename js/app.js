@@ -564,8 +564,8 @@ function renderBcrPredPanel(app, api, ban, fullSeq, road) {
   // Tính ensemble nếu đủ data
   let best = null, conf = 0, votes = 0, total = 0;
   if (rl.length >= 5) {
-    const _ep = typeof window.ensemblePredict === "function" ? window.ensemblePredict
-              : typeof ensemblePredict === "function" ? ensemblePredict : null;
+    const _ep = typeof window.ensembleBCR === "function" ? window.ensembleBCR
+              : typeof ensembleBCR === "function" ? ensembleBCR : null;
     if (_ep) try { ({ best, conf, votes, total } = _ep(rl, lb)); } catch(e) {}
   }
   // Fallback: lấy du_doan_tiep từ bot Python (Supabase) khi chưa đủ data
