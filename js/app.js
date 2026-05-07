@@ -371,6 +371,29 @@ async function openBcrGame(app, banId) {
   openPred();
   closeSidebar();
 
+  // Reload BCR stats cho bàn này mỗi khi mở (để Chính xác / Đúng / Sai luôn cập nhật)
+  try {
+    const banKey = "Ban_" + String(banId);
+    const vRes = await fetch(
+      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrVerdicts}?app=eq.bcr&ban=eq.${encodeURIComponent(banId)}&select=dung&order=updated_at.desc&limit=200`,
+      { headers: _SH() }
+    );
+    if (vRes.ok) {
+      const vRows = await vRes.json();
+      if (Array.isArray(vRows) && vRows.length > 0) {
+        let d = 0, s = 0;
+        vRows.forEach(row => {
+          const isDung = row.dung === true || row.dung === "true";
+          const isSai  = row.dung === false || row.dung === "false";
+          if (isDung) d++;
+          else if (isSai) s++;
+        });
+        if (!window._statData[app]) window._statData[app] = {};
+        window._statData[app][banKey] = { d, s };
+      }
+    }
+  } catch(e) { console.warn("[openBcrGame] reload stats lỗi:", e); }
+
   // Load BCR data for selected table
   doFetchBcr(app, banId);
   clearInterval(window._fetchTimer);
