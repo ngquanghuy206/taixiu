@@ -16,6 +16,24 @@ if (typeof calcStreak === 'undefined') {
 }
 
 
+// ── BCR BAN UTILS ──────────────────────────────────────────
+// Normalize ban_id để hiển thị: "11" → "C11", "C11" → "C11"
+function normBanDisplay(ban) {
+  const s = String(ban || "");
+  if (!s) return s;
+  // Nếu là số thuần (1, 11, 16...) thì thêm "C"
+  if (/^\d+$/.test(s)) return "C" + s.padStart(2, "0").replace(/^0(\d{2,})/, "$1");
+  return s.toUpperCase();
+}
+// Tạo tất cả variants của ban_id để query/match
+function banVariants(banId) {
+  const s = String(banId || "");
+  const num = s.replace(/^C/i, "");
+  const numPad = num.padStart(2, "0");
+  return [...new Set([s, num, "C"+num, "C"+numPad, num.replace(/^0+/,""), "C"+num.replace(/^0+/,"")])]
+    .filter(Boolean);
+}
+
 // ── STATE ──────────────────────────────────────────────────
 window._histData    = {};
 window._statData    = {};
@@ -92,19 +110,16 @@ async function preloadAllStats() {
           });
           // Cũng lưu tổng vào "Baccarat" để badge lobby hiện được
           window._statData["bcr"]["Baccarat"] = { d: totalD, s: totalS };
-          // Tạo alias cho tất cả format ban_id: "C01" ↔ "1" ↔ "01"
+          // Tạo alias cho TẤT CẢ format ban_id
           Object.keys(window._statData["bcr"]).filter(k => k.startsWith("Ban_")).forEach(k => {
-            const raw     = k.replace("Ban_", "");
-            const numOnly = raw.replace(/^C/i, "");
-            const withC   = "C" + numOnly;
+            const raw = k.replace("Ban_", "");
             const src = window._statData["bcr"][k];
             if (src.d + src.s > 0) {
-              const keyNum = "Ban_" + numOnly;
-              const keyC   = "Ban_" + withC;
-              if (!window._statData["bcr"][keyNum] || window._statData["bcr"][keyNum].d + window._statData["bcr"][keyNum].s === 0)
-                window._statData["bcr"][keyNum] = { ...src };
-              if (!window._statData["bcr"][keyC] || window._statData["bcr"][keyC].d + window._statData["bcr"][keyC].s === 0)
-                window._statData["bcr"][keyC] = { ...src };
+              banVariants(raw).forEach(v => {
+                const aliasKey = "Ban_" + v;
+                if (!window._statData["bcr"][aliasKey] || window._statData["bcr"][aliasKey].d + window._statData["bcr"][aliasKey].s === 0)
+                  window._statData["bcr"][aliasKey] = { ...src };
+              });
             }
           });
         }
@@ -308,7 +323,7 @@ function renderBcrTableGrid(tables, grid) {
     card.dataset.banId = banId;
     card.innerHTML = `
       <div class="bcr-table-header">
-        <div class="bcr-table-num">Bàn ${banId}</div>
+        <div class="bcr-table-num">Bàn ${normBanDisplay(banId)}</div>
         <div class="bcr-table-kq ${lastCl}">${lastEmoji} ${lastKq}</div>
       </div>
       <div class="bcr-table-recent">${recent8 || "<span style='opacity:.4'>Chưa có dữ liệu</span>"}</div>
@@ -320,7 +335,7 @@ function renderBcrTableGrid(tables, grid) {
       ${predHtml}
       <div class="bcr-table-road">🛤️ ${road || "—"}</div>
       <div class="bcr-table-total">📊 ${total} phiên</div>
-      <button class="bcr-enter-btn" onclick="enterBcrTable('${banId}')">Vào Bàn ${banId} →</button>
+      <button class="bcr-enter-btn" onclick="enterBcrTable('${banId}')">Vào Bàn ${normBanDisplay(banId)} →</button>
     `;
     grid.appendChild(card);
   });
@@ -365,8 +380,8 @@ async function openBcrGame(app, banId) {
 
   setActivePage("game");
   const em = BRAND_EMOJI[app] || "🎴";
-  document.getElementById("game-brand-tag").textContent = `${em} BCR — Bàn ${banId}`;
-  document.getElementById("topbar-center").innerHTML    = `<span class="topbar-brand">${em} Baccarat — Bàn ${banId}</span>`;
+  document.getElementById("game-brand-tag").textContent = `${em} BCR — Bàn ${normBanDisplay(banId)}`;
+  document.getElementById("topbar-center").innerHTML    = `<span class="topbar-brand">${em} Baccarat — Bàn ${normBanDisplay(banId)}</span>`;
   // Hiện loading spinner ngay trong pred-body
   const pbInit = document.getElementById("pred-body");
   if (pbInit) pbInit.innerHTML = `<div class="pred-loading"><span>🔄 Đang tải dữ liệu bàn ${banId}...</span></div>`;
@@ -424,19 +439,16 @@ async function openBcrGame(app, banId) {
           else        { window._statData[app][useKey].s++; totalS++; }
         });
         window._statData[app]["Baccarat"] = { d: totalD, s: totalS };
-        // Thêm alias: nếu "Ban_C01" có data thì copy sang "Ban_1" và ngược lại
+        // Tạo alias cho TẤT CẢ format ban_id
         Object.keys(window._statData[app]).filter(k => k.startsWith("Ban_")).forEach(k => {
           const raw = k.replace("Ban_", "");
-          const numOnly = raw.replace(/^C/i, "");
-          const withC   = "C" + numOnly;
-          const keyNum  = "Ban_" + numOnly;
-          const keyC    = "Ban_" + withC;
           const src = window._statData[app][k];
           if (src.d + src.s > 0) {
-            if (!window._statData[app][keyNum] || window._statData[app][keyNum].d + window._statData[app][keyNum].s === 0)
-              window._statData[app][keyNum] = { ...src };
-            if (!window._statData[app][keyC] || window._statData[app][keyC].d + window._statData[app][keyC].s === 0)
-              window._statData[app][keyC] = { ...src };
+            banVariants(raw).forEach(v => {
+              const aliasKey = "Ban_" + v;
+              if (!window._statData[app][aliasKey] || window._statData[app][aliasKey].d + window._statData[app][aliasKey].s === 0)
+                window._statData[app][aliasKey] = { ...src };
+            });
           }
         });
       }
@@ -466,8 +478,8 @@ async function doFetchBcr(app, banId) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       // Thử nhiều format ban ID: "C16", "16", "c16"
-      const banVariants = [banId, banId.replace(/^C/i,""), "C"+banId.replace(/^C/i,"")];
-      const banVariantsEnc = banVariants.map(b => encodeURIComponent(b)).join(",");
+      const banVars = banVariants(banId);
+      const banVariantsEnc = banVars.map(b => encodeURIComponent(b)).join(",");
       const res = await fetch(
         `${SUPA_URL}/rest/v1/${DB_TABLES.bcrResults}?app=eq.bcr&ban=in.(${banVariantsEnc})&select=*&order=updated_at.desc&limit=1`,
         { headers: _SH() }
@@ -483,7 +495,7 @@ async function doFetchBcr(app, banId) {
         );
         const rows2 = await res2.json();
         const fallbackBan = rows2?.find(r =>
-          banVariants.some(v => String(r.ban).toLowerCase() === String(v).toLowerCase())
+          banVars.some(v => String(r.ban).toLowerCase() === String(v).toLowerCase())
         );
         if (!fallbackBan) {
           if (pb) pb.innerHTML = `<div class="pred-loading">
@@ -2026,7 +2038,11 @@ async function openHistModal(app, label, type) {
       const selectCols = (app === "bcr") ? "ban,du_doan,ket_qua_thuc_te,dung,updated_at" : "phien,du_doan,ket_qua_thuc_te,dung";
       // FIX: BCR filter theo ban cụ thể nếu label có dạng "Ban_C11"
       const bcrBanId = (app === "bcr" && label.startsWith("Ban_")) ? label.replace("Ban_", "") : null;
-      const filterLabel = (app === "bcr") ? (bcrBanId ? `&ban=eq.${encodeURIComponent(bcrBanId)}` : "") : `&api_label=eq.${encodeURIComponent(label)}`;
+      // Dùng tất cả variants của ban_id để không bỏ sót
+      const bcrBanVars = bcrBanId ? banVariants(bcrBanId) : null;
+      const filterLabel = (app === "bcr")
+        ? (bcrBanVars ? `&ban=in.(${bcrBanVars.map(v=>encodeURIComponent(v)).join(",")})` : "")
+        : `&api_label=eq.${encodeURIComponent(label)}`;
       const vRes = await fetch(
         `${SUPA_URL}/rest/v1/${table}?app=eq.${encodeURIComponent(app)}${filterLabel}&order=${orderBy}.desc&limit=100&select=${selectCols}`,
         { headers: _SH() }
