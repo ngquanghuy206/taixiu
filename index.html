@@ -417,13 +417,76 @@
   document.getElementById("inp-pass").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
   document.getElementById("inp-user").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("inp-pass").focus(); });
 
-  // Lưu đăng nhập — load saved credentials
-  (function() {
+  // Lưu đăng nhập — auto login nếu có saved credentials
+  (async function() {
     const saved = JSON.parse(localStorage.getItem("tx_remember") || "null");
-    if (saved && saved.u && saved.p) {
-      document.getElementById("inp-user").value = saved.u;
-      document.getElementById("inp-pass").value = saved.p;
-      document.getElementById("chk-remember").checked = true;
+    if (!saved || !saved.u || !saved.p) return;
+
+    // Điền vào ô input
+    document.getElementById("inp-user").value = saved.u;
+    document.getElementById("inp-pass").value = saved.p;
+    document.getElementById("chk-remember").checked = true;
+
+    // Hiện loading
+    const btn = document.getElementById("login-btn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spin"></span> Đang đăng nhập...';
+
+    try {
+      // Admin bypass
+      const ADMIN_U = typeof ADMIN_USER !== "undefined" ? ADMIN_USER : null;
+      const ADMIN_P = typeof ADMIN_PASS !== "undefined" ? ADMIN_PASS : null;
+      if (ADMIN_U && saved.u === ADMIN_U && saved.p === ADMIN_P) {
+        window._curUser = saved.u;
+        window._isAdmin = true;
+        window._expireAt = null;
+        getClientIP().then(ip => { window._clientIP = ip; }).catch(() => {});
+        btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP";
+        try { launchApp(); } catch(e) {}
+        return;
+      }
+
+      // Fetch user từ Supabase
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 8000);
+      const r = await fetch(`${SUPA_URL}/rest/v1/${DB_TABLES.users}?select=*`, {
+        headers: _SH(), signal: ctrl.signal
+      });
+      clearTimeout(tid);
+      if (!r.ok) { btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return; }
+
+      const users = await r.json();
+      const acc = users.find(x => x.username === saved.u && x.password === saved.p);
+      if (!acc || new Date(acc.expires) < new Date()) {
+        localStorage.removeItem("tx_remember");
+        btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
+      }
+
+      // Device check
+      const ip = await getClientIP();
+      const maxDev = acc.max_devices || 1;
+      let devList = await getDeviceList(saved.u);
+      if (!devList.includes(ip)) {
+        if (devList.length >= maxDev) {
+          btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP"; return;
+        }
+        devList.push(ip);
+        await saveDeviceList(saved.u, devList);
+      }
+
+      window._curUser     = saved.u;
+      window._isAdmin     = false;
+      window._clientIP    = ip;
+      window._userExpires = acc.expires;
+      window._expireAt    = new Date(acc.expires).getTime();
+
+      btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP";
+      try {
+        launchApp();
+        startExpireCountdown(acc.expires);
+      } catch(e) {}
+    } catch(e) {
+      btn.disabled = false; btn.innerHTML = "ĐĂNG NHẬP";
     }
   })();
 </script>
