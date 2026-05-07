@@ -504,7 +504,7 @@ function renderHubHistBcr(app, api, fullSeq, ban) {
   recent.forEach((kq, i) => {
     const cl = RCL[kq] || "";
     const emoji = RE[kq] || "⬜";
-    const phienNum = fullSeq.length - i;
+    const phienNum = recent.length - i;
     html += `
     <div class="hub-hist-row ${cl}">
       <div class="hub-hist-phien">#${phienNum}</div>
