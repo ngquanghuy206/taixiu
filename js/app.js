@@ -2,6 +2,20 @@
 //  APP LOGIC — Game View, Fetch, Render  |  Tài Xỉu AI
 // ═══════════════════════════════════════════════════════════
 
+// ── SAFETY: đảm bảo calcStreak luôn có dù algorithms.js chưa load
+if (typeof calcStreak === 'undefined') {
+  function calcStreak(r) {
+    if (!r || r.length === 0) return 0;
+    let s = 1;
+    for (let i = r.length - 2; i >= 0; i--) {
+      if (r[i] === r[r.length - 1]) s++;
+      else break;
+    }
+    return s;
+  }
+}
+
+
 // ── STATE ──────────────────────────────────────────────────
 window._histData    = {};
 window._statData    = {};
