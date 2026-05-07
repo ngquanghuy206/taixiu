@@ -71,8 +71,10 @@ async function preloadAllStats() {
           bcrRows.forEach(row => {
             const banKey = "Ban_" + String(row.ban || "all");
             if (!window._statData["bcr"][banKey]) window._statData["bcr"][banKey] = { d: 0, s: 0 };
-            if (row.dung === true)  { window._statData["bcr"][banKey].d++; totalD++; }
-            else if (row.dung === false) { window._statData["bcr"][banKey].s++; totalS++; }
+            const isDung = row.dung === true || row.dung === "true";
+            const isSai  = row.dung === false || row.dung === "false";
+            if (isDung) { window._statData["bcr"][banKey].d++; totalD++; }
+            else if (isSai) { window._statData["bcr"][banKey].s++; totalS++; }
           });
           // Cũng lưu tổng vào "Baccarat" để badge lobby hiện được
           window._statData["bcr"]["Baccarat"] = { d: totalD, s: totalS };

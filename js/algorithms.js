@@ -638,3 +638,15 @@ if (typeof window !== 'undefined') {
   window.BCR_METHOD_NAMES = BCR_METHOD_NAMES;
   window.backtest         = backtest;
 }
+
+// ─── UI UTILITIES (dùng cho hiển thị, không liên quan predict) ─
+function calcStreak(r) {
+  if (!r || r.length === 0) return 0;
+  let s = 1;
+  for (let i = r.length - 2; i >= 0; i--) {
+    if (r[i] === r[r.length - 1]) s++;
+    else break;
+  }
+  return s;
+}
+if (typeof window !== 'undefined') window.calcStreak = calcStreak;
