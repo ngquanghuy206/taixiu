@@ -92,6 +92,21 @@ async function preloadAllStats() {
           });
           // Cũng lưu tổng vào "Baccarat" để badge lobby hiện được
           window._statData["bcr"]["Baccarat"] = { d: totalD, s: totalS };
+          // Tạo alias cho tất cả format ban_id: "C01" ↔ "1" ↔ "01"
+          Object.keys(window._statData["bcr"]).filter(k => k.startsWith("Ban_")).forEach(k => {
+            const raw     = k.replace("Ban_", "");
+            const numOnly = raw.replace(/^C/i, "");
+            const withC   = "C" + numOnly;
+            const src = window._statData["bcr"][k];
+            if (src.d + src.s > 0) {
+              const keyNum = "Ban_" + numOnly;
+              const keyC   = "Ban_" + withC;
+              if (!window._statData["bcr"][keyNum] || window._statData["bcr"][keyNum].d + window._statData["bcr"][keyNum].s === 0)
+                window._statData["bcr"][keyNum] = { ...src };
+              if (!window._statData["bcr"][keyC] || window._statData["bcr"][keyC].d + window._statData["bcr"][keyC].s === 0)
+                window._statData["bcr"][keyC] = { ...src };
+            }
+          });
         }
       }
     } catch(e2) { console.warn("preloadAllStats BCR lỗi:", e2); }
@@ -371,25 +386,59 @@ async function openBcrGame(app, banId) {
   openPred();
   closeSidebar();
 
-  // Reload BCR stats cho bàn này mỗi khi mở (để Chính xác / Đúng / Sai luôn cập nhật)
+  // Reload BCR stats — lấy TẤT CẢ bàn rồi group để tránh lỗi format ban_id
   try {
-    const banKey = "Ban_" + String(banId);
     const vRes = await fetch(
-      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrVerdicts}?app=eq.bcr&ban=eq.${encodeURIComponent(banId)}&select=dung&order=updated_at.desc&limit=200`,
+      `${SUPA_URL}/rest/v1/${DB_TABLES.bcrVerdicts}?app=eq.bcr&select=ban,dung&order=updated_at.desc&limit=1000`,
       { headers: _SH() }
     );
     if (vRes.ok) {
       const vRows = await vRes.json();
       if (Array.isArray(vRows) && vRows.length > 0) {
-        let d = 0, s = 0;
+        if (!window._statData[app]) window._statData[app] = {};
+        // Reset tất cả stats BCR trước
+        Object.keys(window._statData[app]).forEach(k => {
+          if (k.startsWith("Ban_")) window._statData[app][k] = { d: 0, s: 0 };
+        });
+        let totalD = 0, totalS = 0;
         vRows.forEach(row => {
           const isDung = row.dung === true || row.dung === "true";
           const isSai  = row.dung === false || row.dung === "false";
-          if (isDung) d++;
-          else if (isSai) s++;
+          if (!isDung && !isSai) return;
+          // Thử tất cả format: "C01", "01", "1"
+          const rawBan = String(row.ban || "");
+          const variants = [
+            rawBan,
+            rawBan.replace(/^C/i, ""),
+            "C" + rawBan.replace(/^C/i, ""),
+            rawBan.padStart(2, "0"),
+            "C" + rawBan.replace(/^C/i, "").padStart(2, "0"),
+          ];
+          // Map banId hiện tại vào đúng key
+          const matchKey = variants.find(v =>
+            `Ban_${v}`.toLowerCase() === `Ban_${banId}`.toLowerCase()
+          );
+          const useKey = matchKey ? `Ban_${matchKey}` : `Ban_${rawBan}`;
+          if (!window._statData[app][useKey]) window._statData[app][useKey] = { d: 0, s: 0 };
+          if (isDung) { window._statData[app][useKey].d++; totalD++; }
+          else        { window._statData[app][useKey].s++; totalS++; }
         });
-        if (!window._statData[app]) window._statData[app] = {};
-        window._statData[app][banKey] = { d, s };
+        window._statData[app]["Baccarat"] = { d: totalD, s: totalS };
+        // Thêm alias: nếu "Ban_C01" có data thì copy sang "Ban_1" và ngược lại
+        Object.keys(window._statData[app]).filter(k => k.startsWith("Ban_")).forEach(k => {
+          const raw = k.replace("Ban_", "");
+          const numOnly = raw.replace(/^C/i, "");
+          const withC   = "C" + numOnly;
+          const keyNum  = "Ban_" + numOnly;
+          const keyC    = "Ban_" + withC;
+          const src = window._statData[app][k];
+          if (src.d + src.s > 0) {
+            if (!window._statData[app][keyNum] || window._statData[app][keyNum].d + window._statData[app][keyNum].s === 0)
+              window._statData[app][keyNum] = { ...src };
+            if (!window._statData[app][keyC] || window._statData[app][keyC].d + window._statData[app][keyC].s === 0)
+              window._statData[app][keyC] = { ...src };
+          }
+        });
       }
     }
   } catch(e) { console.warn("[openBcrGame] reload stats lỗi:", e); }
